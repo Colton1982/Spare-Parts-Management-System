@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}{{ tr('page_setup') }} - Spare Parts Management System{% endblock %}
+{% block fullpage %}
+<div class="login-wrap">
+  <form class="login-card setup-card" method="post" style="width:520px">
+    <div class="login-logo">⚙</div>
+    <h1>{{ tr('系统初始化向导') }}</h1>
+    <p class="login-sub">{{ tr('首次运行') }}{{ tr('：') }}{{ tr('请指定数据库位置') }}{{ tr('（') }}{{ tr('建议放在内网公共盘，供所有用户共享') }}{{ tr('）') }}</p>
+    {% with msgs = get_flashed_messages(with_categories=true) %}
+      {% for cat, m in msgs %}
+        <div class="flash flash-{{ cat }}">{{ tr(m) }}</div>
+      {% endfor %}
+    {% endwith %}
+    <label class="f-label">{{ tr('数据库文件路径') }} *</label>
+    <input class="f-input" name="db_path" required placeholder="{{ tr('例如') }} \\\\192.168.1.100\shared\SparePartsManagement\SPMS.db"
+           value="{{ default_db }}">
+    <p class="muted small" style="margin-top:4px">{{ tr('提示') }}{{ tr('：') }}{{ tr('路径指向内网公共盘时，所有用户共享同一数据库；指向本机则仅本机可用') }}{{ tr('。') }}</p>
+    <label class="f-label">{{ tr('备件图片目录') }}{{ tr('（') }}{{ tr('可空') }}{{ tr('；') }}{{ tr('默认在数据库同级') }} parts_img {{ tr('文件夹') }}{{ tr('）') }}</label>
+    <input class="f-input" name="upload_dir" placeholder="{{ tr('例如') }} \\\\192.168.1.100\shared\SparePartsManagement\parts_img">
+    <label class="f-check"><input type="checkbox" name="demo_data" value="1"> {{ tr('初始化演示数据') }}{{ tr('（') }}{{ tr('备件') }}/{{ tr('流水') }}{{ tr('；') }}{{ tr('便于试用，正式使用可不勾选') }}{{ tr('）') }}</label>
+    <button class="btn btn-primary btn-block" type="submit">{{ tr('保存并启动') }}</button>
+  </form>
+</div>
+{% endblock %}

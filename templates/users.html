@@ -1,0 +1,114 @@
+{% extends "base.html" %}
+{% block title %}{{ tr('page_users') }} - Spare Parts Management System{% endblock %}
+{% block page_title %}>{{ tr('page_users') }}{% endblock %}
+{% block content %}
+
+<div class="card">
+  <div class="card-title">{{ tr('新增用户') }}</div>
+  <form class="inline-form" method="post" action="{{ url_for('user_add') }}">
+    <input class="f-input" name="username" placeholder="{{ tr('用户名') }}({{ tr('登录账号') }})" required>
+    <input class="f-input" type="password" name="password" placeholder="{{ tr('初始密码') }}({{ tr('≥6位') }})" required>
+    <input class="f-input" name="display_name" placeholder="{{ tr('姓名/工号') }}" required>
+    <select class="f-input" name="role">
+      {% for r in roles %}<option value="{{ r }}" {{ 'selected' if r=='user' }}>{{ tr(ROLE_NAMES[r]) }}</option>{% endfor %}
+    </select>
+    <select class="f-input" name="department">
+      <option value="">{{ tr('未分配部门') }}</option>
+      {% for d in departments %}<option value="{{ d.name }}">{{ d.name }}</option>{% endfor %}
+    </select>
+    <button class="btn btn-primary" type="submit">{{ tr('添加用户') }}</button>
+  </form>
+  <div class="muted small">{{ tr('角色') }}{{ tr('：') }}{{ tr('普通用户') }}{{ tr('（') }}{{ tr('申请与查询') }}{{ tr('）') }}{{ tr('／') }}{{ tr('仓库管理人员') }}{{ tr('（') }}{{ tr('出入库管理') }}{{ tr('、') }}{{ tr('建档') }}{{ tr('）') }}{{ tr('／') }}{{ tr('经理') }}{{ tr('（') }}{{ tr('贵重出库审批等') }}{{ tr('）') }}{{ tr('／') }}{{ tr('高级管理人员') }}{{ tr('（') }}{{ tr('全部权限') }}{{ tr('）') }}{{ tr('；') }}{{ tr('部门在') }}{{ tr('「') }}{{ tr('部门配置') }}{{ tr('」') }}{{ tr('中维护') }}{{ tr('。') }}</div>
+</div>
+
+<div class="card">
+  <div class="card-title">{{ tr('用户列表') }}</div>
+  <div class="table-wrap">
+    <table class="table">
+      <thead><tr><th>ID</th><th>{{ tr('fld_username') }}</th><th>{{ tr('姓名') }}</th><th>{{ tr('fld_role') }}</th><th>{{ tr('fld_department') }}</th><th>{{ tr('th_status') }}</th><th>{{ tr('创建时间') }}</th><th>{{ tr('th_ops') }}</th></tr></thead>
+      <tbody>
+        {% for u in users %}
+        <tr>
+          <td>{{ u.id }}</td>
+          <td class="mono">{{ u.username }}</td>
+          <td>{{ u.display_name }}</td>
+          <td><span class="role-badge role-{{ u.role }}">{{ tr(ROLE_NAMES[u.role]) }}</span></td>
+          <td>{{ u.department or '<span class="muted">-</span>'|safe }}</td>
+          <td>{% if u.active %}<span class="badge badge-ok">{{ tr('启用') }}</span>{% else %}<span class="badge badge-warn">{{ tr('停用') }}</span>{% endif %}</td>
+          <td class="mono">{{ u.created_at }}</td>
+          <td class="ops">
+            <button class="btn btn-xs" onclick="openEdit({{ u.id }}, '{{ u.username }}', '{{ u.display_name }}', '{{ u.role }}', '{{ u.department or '' }}', {{ u.active }})">{{ tr('btn_edit') }}</button>
+            <button class="btn btn-xs" onclick="openReset({{ u.id }}, '{{ u.username }}')">{{ tr('重置密码') }}</button>
+            {% if u.id != cur_uid %}
+            <button class="btn btn-xs btn-danger" onclick="delUser({{ u.id }}, '{{ u.display_name }}')">{{ tr('btn_delete') }}</button>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div class="muted small">{{ tr('停用账号后该用户无法登录') }}{{ tr('；') }}{{ tr('请勿停用') }}/{{ tr('降级系统中最后一名启用中的高级管理人员') }}{{ tr('。') }}</div>
+</div>
+
+<div class="modal-mask" id="edit-modal" style="display:none" onclick="if(event.target===this)closeModal('edit-modal')">
+  <div class="modal">
+    <div class="modal-head"><span>{{ tr('编辑用户') }}</span><button class="modal-x" onclick="closeModal('edit-modal')">✕</button></div>
+    <form class="modal-body" method="post" id="edit-form">
+      <p class="muted" id="edit-username"></p>
+      <div class="grid2">
+        <label class="f-label">{{ tr('姓名') }}<input class="f-input" name="display_name" id="u-name" required></label>
+        <label class="f-label">{{ tr('角色') }}<select class="f-input" name="role" id="u-role">
+            {% for r in roles %}<option value="{{ r }}">{{ tr(ROLE_NAMES[r]) }}</option>{% endfor %}
+          </select>
+        </label>
+        <label class="f-label">{{ tr('部门') }}<select class="f-input" name="department" id="u-department">
+            <option value="">{{ tr('未分配部门') }}</option>
+            {% for d in departments %}<option value="{{ d.name }}">{{ d.name }}</option>{% endfor %}
+          </select>
+        </label>
+      </div>
+      <label class="f-check"><input type="checkbox" name="active" id="u-active" value="1">{{ tr('启用该账号') }}</label>
+      <label class="f-label">{{ tr('重置密码') }}{{ tr('（') }}{{ tr('留空则不修改') }}{{ tr('）') }}<input class="f-input" type="password" name="password" placeholder="{{ tr('≥6位') }}"></label>
+      <div class="modal-foot"><button class="btn btn-primary" type="submit">{{ tr('btn_save') }}</button>
+      <button class="btn" type="button" onclick="closeModal('edit-modal')">{{ tr('btn_cancel') }}</button></div>
+    </form>
+  </div>
+</div>
+
+<div class="modal-mask" id="reset-modal" style="display:none" onclick="if(event.target===this)closeModal('reset-modal')">
+  <div class="modal">
+    <div class="modal-head"><span>{{ tr('重置密码') }}</span><button class="modal-x" onclick="closeModal('reset-modal')">✕</button></div>
+    <form class="modal-body" method="post" id="reset-form">
+      <label class="f-label">{{ tr('新密码') }}<input class="f-input" type="password" name="password" placeholder="{{ tr('≥6位') }}" required></label>
+      <div class="modal-foot"><button class="btn btn-primary" type="submit">{{ tr('确认重置') }}</button>
+      <button class="btn" type="button" onclick="closeModal('reset-modal')">{{ tr('btn_cancel') }}</button></div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+function closeModal(id){ document.getElementById(id).style.display='none'; }
+function openEdit(uid, uname, name, role, department, active){
+  document.getElementById('edit-form').action='/users/'+uid+'/edit';
+  document.getElementById('edit-username').innerHTML='{{ tr('用户名') }}{{ tr('：') }}<b>'+uname+'</b>';
+  document.getElementById('u-name').value=name;
+  document.getElementById('u-role').value=role;
+  document.getElementById('u-department').value=department;
+  document.getElementById('u-active').checked=!!active;
+  document.getElementById('edit-modal').style.display='flex';
+}
+function openReset(uid, uname){
+  document.getElementById('reset-form').action='/users/'+uid+'/reset';
+  const lab=document.getElementById('reset-modal').querySelector('.f-label');
+  lab.innerHTML='{{ tr('新密码') }}{{ tr('（') }}'+uname+'{{ tr('）') }}<input class="f-input" type="password" name="password" placeholder="'+TR('≥6位')+'" required>';
+  document.getElementById('reset-modal').style.display='flex';
+}
+function delUser(uid, name){
+  if(!confirm(TR('确定删除用户')+' ['+name+']'+TR(' ？\n删除后进入回收站{{ tr('（') }}')+TR('管理员可恢复')+'{{ tr('）') }}')) return;
+  const f=document.createElement('form'); f.method='post'; f.action='/users/'+uid+'/delete';
+  document.body.appendChild(f); f.submit();
+}
+</script>
+{% endblock %}

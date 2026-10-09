@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block title %}{{ tr('page_login') }} - Spare Parts Management System{% endblock %}
+{% block fullpage %}
+<div class="login-wrap">
+  <div class="login-card">
+    <div class="login-lang">
+      <select class="f-input" style="max-width:140px" onchange="location.href='?lang='+this.value">
+        {% for code, name in LANGUAGES.items() %}
+        <option value="{{ code }}" {{ 'selected' if cur_lang==code }}>{{ name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="login-logo">⚙</div>
+    <h1>Spare Parts Management System</h1>
+    <p class="login-sub">{{ tr('内网备件出入库 · 权限管理 · 数据图表') }}</p>
+    {% with msgs = get_flashed_messages(with_categories=true) %}
+      {% for cat, m in msgs %}
+        <div class="flash flash-{{ cat }}">{{ tr(m) }}</div>
+      {% endfor %}
+    {% endwith %}
+
+    <div class="login-tabs">
+      <button type="button" class="login-tab" id="tab-local" onclick="switchTab('local')">{{ tr('role_user') }}</button>
+      {% if ad_enabled %}<button type="button" class="login-tab" id="tab-ad" onclick="switchTab('ad')">AD</button>{% endif %}
+    </div>
+
+    <form method="post" id="form-local">
+      <label class="f-label">{{ tr('用户名') }}</label>
+      <input class="f-input" type="text" name="username" required autofocus placeholder="{{ tr('请输入用户名') }}">
+      <label class="f-label">{{ tr('密码') }}</label>
+      <input class="f-input" type="password" name="password" required placeholder="{{ tr('请输入密码') }}">
+      <button class="btn btn-primary btn-block" type="submit">{{ tr('登 录') }}</button>
+      <p class="login-tip">{{ tr('如需账号请联系管理员开通 · 首次登录请修改密码') }}</p>
+    </form>
+
+    {% if ad_enabled %}
+    <form method="post" action="{{ url_for('login_ad') }}" id="form-ad" style="display:none">
+      <label class="f-label">{{ tr('域用户名') }}</label>
+      <input class="f-input" type="text" name="username" required placeholder="{{ tr('公司') }} AD {{ tr('账号') }}{{ tr('（') }}zhangsan 或 zhangsan@company.com{{ tr('）') }}">
+      <label class="f-label">{{ tr('域密码') }}</label>
+      <input class="f-input" type="password" name="password" required placeholder="{{ tr('公司 AD 密码') }}">
+      <button class="btn btn-primary btn-block" type="submit">{{ tr('AD 登 录') }}</button>
+      <p class="login-tip">{{ tr('使用公司统一账号验证；不在白名单时将自动以访客身份进入（仅可查阅备件与呆滞物料）') }}</p>
+    </form>
+    {% endif %}
+  </div>
+</div>
+<script>
+  function switchTab(mode){
+    document.getElementById('tab-local').classList.toggle('active', mode === 'local');
+    var ta = document.getElementById('tab-ad');
+    if(ta) ta.classList.toggle('active', mode === 'ad');
+    document.getElementById('form-local').style.display = mode === 'local' ? '' : 'none';
+    var fa = document.getElementById('form-ad');
+    if(fa) fa.style.display = mode === 'ad' ? '' : 'none';
+  }
+  {% if ad_enabled %}
+  var p = new URLSearchParams(location.search);
+  if(p.get('tab') === 'ad') switchTab('ad');
+  {% endif %}
+</script>
+<style>
+.login-tabs{display:flex;gap:6px;margin:14px 0 18px;border-radius:10px;background:#f1f5f9;padding:4px}
+.login-tab{flex:1;border:none;background:transparent;padding:9px 0;border-radius:8px;font-size:14px;color:#64748b;cursor:pointer;font-weight:600}
+.login-tab.active{background:#2563eb;color:#fff}
+</style>
+{% endblock %}

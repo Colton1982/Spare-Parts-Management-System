@@ -1,0 +1,140 @@
+{% extends "base.html" %}
+{% block title %}{{ tr('page_parts') }} - Spare Parts Management System{% endblock %}
+{% block page_title %}>{{ tr('page_parts') }}{% endblock %}
+{% block content %}
+
+<div class="toolbar">
+  <form class="toolbar-form" method="get">
+    <input class="f-input" type="text" name="kw" value="{{ kw }}" placeholder="{{ tr('料号') }} / {{ tr('名称') }} / {{ tr('规格') }}">
+    <select class="f-input" name="category">
+      <option value="">{{ tr('全部分类') }}</option>
+      {% for c in categories %}<option value="{{ c }}" {{ 'selected' if cat==c }}>{{ c }}</option>{% endfor %}
+    </select>
+    <select class="f-input" name="state">
+      <option value="">{{ tr('库存状态(全部)') }}</option>
+      <option value="low" {{ 'selected' if state=='low' }}>{{ tr('低于下限') }}</option>
+      <option value="high" {{ 'selected' if state=='high' }}>{{ tr('超过上限') }}</option>
+    </select>
+    <button class="btn" type="submit">{{ tr('btn_search') }}</button>
+    <a class="btn" href="{{ url_for('parts_page') }}">{{ tr('btn_reset') }}</a>
+  </form>
+</div>
+
+<div style="display:flow-root;margin:-4px 0 10px">
+  {% if can('parts_manage', 'export') %}
+  <a class="btn btn-xs" style="float:right" href="{{ url_for('parts_export', kw=kw, category=cat, state=state) }}">📥 {{ tr('导出 Excel') }}</a>
+  {% endif %}
+  <span class="muted small">{{ tr('共') }} {{ parts|length }} {{ tr('条记录') }} · {{ tr('全库备件') }} {{ total_kinds }} 种 · {{ tr('库存总量') }} {{ total_stock|int }}</span>
+</div>
+
+<div class="table-wrap">
+  <table class="table">
+    <thead>
+      <tr>
+        <th>{{ tr('图片') }}</th><th>{{ tr('th_code') }}</th><th>{{ tr('th_name') }}</th><th>{{ tr('分类') }}</th><th>{{ tr('规格') }}</th>
+        {% if can('price') %}<th>{{ tr('单价(元)') }}</th>{% endif %}<th>{{ tr('库存') }}</th><th>{{ tr('上下限') }}</th><th>{{ tr('th_status') }}</th><th>{{ tr('存放库位') }}</th><th>{{ tr('适用产线/设备') }}</th>
+        {% for ef in extra_fields %}<th>{{ ef.label }}</th>{% endfor %}
+        <th>{{ tr('status_valuable') }}</th><th>{{ tr('th_ops') }}</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for p in parts %}
+      <tr id="part-{{ p.id }}">
+        <td>
+          {% if p.image_file %}
+          <img class="cell-img" src="{{ url_for('media', fname=p.image_file) }}" onclick="viewImg(this)" title="{{ tr('点击放大') }}">
+          {% else %}<span class="muted">{{ tr('无图') }}</span>{% endif %}
+        </td>
+        <td class="mono">{{ p.part_code }}</td>
+        <td><a href="javascript:;" onclick="viewPart({{ p.id }})">{{ p.name }}</a></td>
+        <td>{{ p.category or '-' }}</td>
+        <td class="mono">{{ p.spec or '-' }}</td>
+        {% if can('price') %}<td class="num">{{ '%.2f'|format(p.unit_price) }}</td>{% endif %}
+        <td class="num"><b>{{ p.stock }}</b> {{ p.unit }}</td>
+        <td class="num">{{ p.min_stock }} / {{ p.max_stock or '∞' }}</td>
+        <td>
+          {% if p.status=='low' %}<span class="badge badge-danger">{{ tr('低于下限') }}</span>
+          {% elif p.status=='high' %}<span class="badge badge-warn">{{ tr('超过上限') }}</span>
+          {% else %}<span class="badge badge-ok">{{ tr('正常') }}</span>{% endif %}
+        </td>
+        <td class="mono small">{{ p.stock_locs_text or (p.location_text or '-') }}</td>
+        <td class="muted small">{{ p.apps_text or '-' }}</td>
+        {% for ef in extra_fields %}<td class="muted">{{ p.extra.get(ef.key, '') or '-' }}</td>{% endfor %}
+        <td>{% if p.is_valuable %}<span class="badge badge-val">{{ tr('status_valuable') }}</span>{% else %}-{% endif %}</td>
+        <td class="ops">
+          <button class="btn btn-xs" onclick="viewPart({{ p.id }})">{{ tr('btn_details') }}</button>
+          {% if can('apply') %}
+          <a class="btn btn-xs" href="{{ url_for('applications_page', part_id=p.id, app_type='out') }}">{{ tr('申请出库') }}</a>
+          <a class="btn btn-xs" href="{{ url_for('applications_page', part_id=p.id, app_type='in') }}">{{ tr('申请入库') }}</a>
+          <a class="btn btn-xs" href="{{ url_for('applications_page', part_id=p.id, app_type='transfer') }}">{{ tr('申请调库') }}</a>
+          {% endif %}
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="{{ (13 if can('price') else 12) + extra_fields|length }}" class="muted center">{{ tr('没有符合条件的备件') }}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+<p class="muted small">{{ tr('备件建档/编辑/删除请在「备件信息维护」中进行') }}</p>
+
+<!-- 详情弹窗 -->
+<div class="modal-mask" id="detail-modal" style="display:none" onclick="if(event.target===this)closeModal('detail-modal')">
+  <div class="modal">
+    <div class="modal-head"><span>{{ tr('备件详情') }}</span><button class="modal-x" onclick="closeModal('detail-modal')">✕</button></div>
+    <div class="modal-body" id="detail-body">{{ tr('加载中…') }}</div>
+  </div>
+</div>
+
+<!-- 图片放大 -->
+<div class="modal-mask" id="img-modal" style="display:none;background:rgba(0,0,0,.7)" onclick="closeModal('img-modal')">
+  <div class="modal modal-img"><img id="img-zoom" src="" style="max-width:100%;max-height:82vh;border-radius:8px"></div>
+</div>
+
+{% endblock %}
+{% block scripts %}
+<script>
+// 金额敏感：SEE_PRICE=false（无「备件金额查看」权限，普通用户默认）时全站隐藏单价/金额
+const SEE_PRICE = {{ 'true' if can('price') else 'false' }};
+function closeModal(id){ document.getElementById(id).style.display='none'; }
+function viewImg(el){ document.getElementById('img-zoom').src=el.src; document.getElementById('img-modal').style.display='flex'; }
+
+function viewPart(pid){
+  const m = document.getElementById('detail-modal');
+  m.style.display='flex';
+  document.getElementById('detail-body').innerHTML=TR('加载中…');
+  fetch('/api/parts/'+pid).then(r=>r.json()).then(d=>{
+    const locRows = d.locations.filter(l=>Number(l.quantity)>0);
+    const locs = locRows.map(l=>'<tr><td>'+esc(l.location)+'</td><td class="num">'+fmt(l.quantity)+'</td></tr>').join('');
+    const appsHtml = (d.apps&&d.apps.length)
+      ? d.apps.map(a=>{
+          const lab = a.equip_name ? a.equip_name : (a.line_name || '');
+          return '<span class="badge" style="background:#eef4fb;color:#3b5f8a">'+esc(lab)+'</span>';
+        }).join(' ')
+      : '-';
+    document.getElementById('detail-body').innerHTML =
+      '<div class="detail-grid">' +
+      (d.image_url ? '<div><img class="detail-img" src="'+d.image_url+'" onclick="viewImg(this)"></div>' : '<div class="muted">{{ tr('暂无图片') }}</div>') +
+      '<div>' +
+      '<p><b>{{ tr('料号') }}{{ tr('：') }}</b><span class="mono">'+esc(d.part_code)+'</span></p>' +
+      '<p><b>{{ tr('名称') }}{{ tr('：') }}</b>'+esc(d.name)+'</p>' +
+      '<p><b>{{ tr('分类') }}{{ tr('：') }}</b>'+esc(d.category||'-')+'</p>' +
+      '<p><b>{{ tr('规格') }}{{ tr('：') }}</b>'+esc(d.spec||'-')+'</p>' +
+      '<p><b>{{ tr('单位') }}{{ tr('：') }}</b>'+esc(d.unit)+'</p>' +
+      (SEE_PRICE ? '<p><b>{{ tr('单价') }}{{ tr('：') }}</b>'+fmt(d.unit_price)+' {{ tr('元') }}</p>' : '') +
+      '<p><b>{{ tr('供应商') }}{{ tr('：') }}</b>'+esc(d.supplier||'-')+'</p>' +
+      '<p><b>{{ tr('适用产线') }}/{{ tr('设备') }}{{ tr('：') }}</b>'+appsHtml+'</p>' +
+      '<p><b>{{ tr('库存上下限') }}{{ tr('：') }}</b>'+fmt(d.min_stock)+' ~ '+(d.max_stock?fmt(d.max_stock):'∞')+'</p>' +
+      '<p><b>{{ tr('贵重备件') }}{{ tr('：') }}</b>'+(d.is_valuable?'<span class="badge badge-val">{{ tr('status_valuable') }}</span>':TR('否'))+'</p>' +
+      '<p><b>{{ tr('总库存') }}{{ tr('：') }}</b>'+fmt(d.total_stock)+' '+esc(d.unit)+'</p>' +
+      '<p><b>{{ tr('备注') }}{{ tr('：') }}</b>'+esc(d.remark||'-')+'</p>' +
+      '</div></div>' +
+      '<h4 class="sub-h">{{ tr('库位分布') }}{{ tr('（') }}{{ tr('共') }} '+locRows.length+' {{ tr('个有库存库位') }}{{ tr('）') }}</h4><table class="table"><thead><tr><th>{{ tr('th_location') }}</th><th>{{ tr('th_quantity') }}</th></tr></thead><tbody>'+
+      (locs||'<tr><td colspan="2" class="muted">{{ tr('无库存') }}</td></tr>')+'</tbody></table>';
+  }).catch(e=>{ document.getElementById('detail-body').innerHTML='<span class="muted">{{ tr('加载失败') }}</span>'; });
+}
+
+function esc(s){ const d=document.createElement('div'); d.textContent=s==null?'':String(s); return d.innerHTML; }
+function fmt(v){ return Number(v||0).toLocaleString('zh-CN'); }
+</script>
+{% endblock %}

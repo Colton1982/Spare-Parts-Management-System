@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}{{ tr('page_transfer') }} - Spare Parts Management System{% endblock %}
+{% block page_title %}>{{ tr('page_transfer') }}{% endblock %}
+{% block content %}
+
+<div class="card">
+  <div class="card-title">{{ tr('库位调拨') }}{{ tr('（') }}A库 {{ tr('→') }} B库{{ tr('，') }}{{ tr('库存总量不变') }}{{ tr('）') }}</div>
+  {% if preset_part %}<div class="flash flash-info" style="margin-bottom:10px">{{ tr('已从备件查询带入') }}{{ tr('：') }}<b>{{ preset_name }}</b>{{ tr('（可修改）') }}</div>{% endif %}
+  <form class="inline-form" method="post" action="{{ url_for('transfer_do') }}">
+    <input type="hidden" name="part_id" id="tr-part-id" value="{{ preset_part or '' }}">
+    <span class="part-pick">
+      <button type="button" class="btn" onclick="PartPicker.show('tr-part-id','tr-part-name')">{{ tr('🔍 选择备件…') }}</button>
+      <span id="tr-part-name" class="muted">{% if preset_part %}{{ tr('已选') }}{{ tr('：') }}{{ preset_name }}{% else %}{{ tr('未选择') }}{% endif %}</span>
+    </span>
+    <input class="f-input" type="number" name="quantity" step="1" min="0.01" placeholder="{{ tr('调拨数量') }}" required>
+    <select class="f-input" name="from_location" required>
+      <option value="">{{ tr('调出库位…') }}</option>
+      {% for l in locations %}<option value="{{ l }}">{{ l }}</option>{% endfor %}
+    </select>
+    <select class="f-input" name="to_location" required>
+      <option value="">{{ tr('调入库位…') }}</option>
+      {% for l in locations %}<option value="{{ l }}">{{ l }}</option>{% endfor %}
+    </select>
+    <input class="f-input" type="text" name="remark" placeholder="{{ tr('备注(可空)') }}">
+    <button class="btn btn-primary" type="submit">{{ tr('执行调库') }}</button>
+  </form>
+  <div class="muted small">{{ tr('备件选择') }}{{ tr('：') }}{{ tr('点击') }}{{ tr('「') }}{{ tr('选择备件') }}{{ tr('」') }}{{ tr('弹出搜索框') }}{{ tr('，') }}{{ tr('支持按') }} {{ tr('料号') }}/{{ tr('名称') }}/{{ tr('规格') }} {{ tr('关键词搜索') }}{{ tr('调出库位库存不足时将无法执行；如需新库位请先在直接入库中录入') }}{{ tr('。') }}</div>
+</div>
+
+<div class="card">
+  <div class="card-title">{{ tr('调库记录') }}{{ tr('（') }}{{ tr('近 100 条') }}{{ tr('）') }}</div>
+  <div class="table-wrap">
+    <table class="table">
+      <thead><tr><th>{{ tr('th_no') }}</th><th>{{ tr('th_time') }}</th><th>{{ tr('th_part') }}</th><th>{{ tr('方向') }}</th><th>{{ tr('th_location') }}</th><th>{{ tr('th_quantity') }}</th><th>{{ tr('th_operator') }}</th><th>{{ tr('备注') }}</th></tr></thead>
+      <tbody>
+        {% for t in txs %}
+        <tr>
+          <td class="mono">{{ t.tx_no }}</td>
+          <td class="mono">{{ t.created_at }}</td>
+          <td>{{ t.part_code }}<br><span class="muted">{{ t.name }}</span></td>
+          <td>{% if t.tx_type=='transfer_out' %}<span class="badge badge-warn">{{ tr('调出') }}</span>{% else %}<span class="badge badge-ok">{{ tr('调入') }}</span>{% endif %}</td>
+          <td>{{ t.location or '-' }}</td>
+          <td class="num">{{ t.quantity }}</td>
+          <td>{{ t.op_name or '-' }}</td>
+          <td class="muted">{{ t.remark or '-' }}</td>
+        </tr>
+        {% else %}<tr><td colspan="8" class="muted center">{{ tr('暂无调库记录') }}</td></tr>{% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

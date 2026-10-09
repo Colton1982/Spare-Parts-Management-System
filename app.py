@@ -1511,24 +1511,24 @@ SCREEN_STYLES = {
         "title": "#e2e8f0", "text": "#e5e7eb", "sub": "#94a3b8", "accent": "#fbbf24",
         "alert_low": "#f87171", "alert_high": "#fb923c"}},
     "midnight-gold": {"name": "暗夜金", "light": False, "vars": {
-        "sbg": "#0e0f12", "sbg2": "#181a20", "head": "#121319", "head2": "#3a2f18",
-        "card": "#16181f", "cardb": "#272a33", "label": "#8b94a6", "num": "#c9a45a",
-        "title": "#efe8d4", "text": "#e6e7ea", "sub": "#9aa2b2", "accent": "#d4b066",
+        "sbg": "#0e0f12", "sbg2": "#191b21", "head": "#13151b", "head2": "#40331f",
+        "card": "#171921", "cardb": "#282c36", "label": "#8d97a8", "num": "#d8ad55",
+        "title": "#f3edda", "text": "#e8e9ed", "sub": "#9ca4b3", "accent": "#e8c766",
         "alert_low": "#f87171", "alert_high": "#fb923c"}},
     "tech-cyan": {"name": "青霓虹", "light": False, "vars": {
-        "sbg": "#0a1118", "sbg2": "#0f2233", "head": "#0c1823", "head2": "#1a3a52",
-        "card": "#0e1e2b", "cardb": "#1a3447", "label": "#6d91a8", "num": "#3bb7d8",
-        "title": "#d6e9f2", "text": "#dbe6ec", "sub": "#85a9bd", "accent": "#4fd0b8",
+        "sbg": "#0a1219", "sbg2": "#102333", "head": "#0d1a26", "head2": "#17445d",
+        "card": "#0f1f2c", "cardb": "#1b3747", "label": "#6f94a8", "num": "#3acfe9",
+        "title": "#d8f1f7", "text": "#dde8ee", "sub": "#88b2c4", "accent": "#5eead4",
         "alert_low": "#f87171", "alert_high": "#fb923c"}},
     "nebula-purple": {"name": "星云紫", "light": False, "vars": {
-        "sbg": "#0d0f1c", "sbg2": "#141831", "head": "#10132a", "head2": "#2a2f55",
-        "card": "#141830", "cardb": "#242950", "label": "#8792bd", "num": "#8f9bf0",
-        "title": "#e5e8f6", "text": "#dde0ef", "sub": "#9ba4cc", "accent": "#a78ff0",
+        "sbg": "#0c0e1c", "sbg2": "#151a33", "head": "#111528", "head2": "#232a52",
+        "card": "#151931", "cardb": "#252c50", "label": "#8894bd", "num": "#94a3f8",
+        "title": "#e7eaf9", "text": "#dee1f0", "sub": "#9da6cc", "accent": "#c48ff0",
         "alert_low": "#f87171", "alert_high": "#fb923c"}},
     "green-data": {"name": "数据绿", "light": False, "vars": {
-        "sbg": "#0b1311", "sbg2": "#12231b", "head": "#0e1a14", "head2": "#1c4433",
-        "card": "#112019", "cardb": "#1f3429", "label": "#6c9685", "num": "#39c795",
-        "title": "#d6efe4", "text": "#dbe7e2", "sub": "#83ac9d", "accent": "#e6b64a",
+        "sbg": "#0b1311", "sbg2": "#13231c", "head": "#0f1b16", "head2": "#1d4a36",
+        "card": "#12211a", "cardb": "#213629", "label": "#6f9c86", "num": "#3fd6a2",
+        "title": "#daf4e9", "text": "#ddeae4", "sub": "#85b2a1", "accent": "#f0c14e",
         "alert_low": "#f87171", "alert_high": "#fb923c"}},
     "light-clean": {"name": "浅色商务", "light": True, "vars": {
         "sbg": "#f4f6f9", "sbg2": "#e3e9f0", "head": "#1e293b", "head2": "#334155",
@@ -1713,7 +1713,7 @@ def screen_page():
     style_css, style_light = _screen_style_css(cfg)
     chart_cards = {"qty_trend", "amt_trend", "category",
                    "line_qty", "line_amt", "dev_qty", "dev_amt"}
-    _lang = request.args.get("lang") or (_settings.load().get("language") or "zh")
+    _lang = request.args.get("lang") or _i18n.current_lang()
     return render_template("screen.html", screen_brand=sb,
                            screen_style=style_css, screen_light=style_light,
                            screen_cards={k: _i18n.t(v["label"], _lang) if isinstance(v, dict) and "label" in v else v for k, v in config.SCREEN_CARDS.items()},
@@ -1726,7 +1726,7 @@ def screen_page():
 @app.route("/api/screen")
 def api_screen():
     """大屏聚合数据：按配置返回各模块数据（一次请求）"""
-    _lang = request.args.get("lang") or (_settings.load().get("language") or "zh")
+    _lang = request.args.get("lang") or _i18n.current_lang()
     conn = get_db()
     try:
         cfg = get_screen_config(conn)

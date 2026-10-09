@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="{{ cur_lang }}">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{% block title %}Spare Parts Management System{% endblock %}</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/style.css', v='20261003') }}">
+<style>
+  :root{
+    --primary: {{ theme.primary }};
+    --primary-d: {{ theme.primary_d }};
+    --bg: {{ theme.bg }};
+    --sidebar-text: {{ theme.sidebar_text }};
+    --sidebar-hover: color-mix(in srgb, var(--sidebar-text) 10%, transparent);
+    --sidebar-border: color-mix(in srgb, var(--sidebar-text) 14%, transparent);
+    --sidebar-foot: color-mix(in srgb, var(--sidebar-text) 48%, transparent);
+    --sidebar-width: {{ nav_style.menu_width }}px;
+    --nav-font-size: {{ nav_style.font_size }}px;
+    --nav-icon-size: {{ nav_style.icon_size }}px;
+    --nav-item-padding: {{ nav_style.item_padding }}px;
+    --nav-item-radius: {{ nav_style.item_radius }}px;
+    --sidebar-top: {{ nav_style.sidebar_top }};
+    --sidebar-bottom: {{ nav_style.sidebar_bottom }};
+    {% if nav_style.font_family %}--nav-font-family: {{ nav_style.font_family }};{% endif %}
+  }
+</style>
+<style>
+.guest-banner{background:#fff7ed;color:#b45309;border-bottom:1px solid #fde68a;font-size:13px;padding:6px 14px;text-align:center}
+</style>
+<script>
+window._TRJSON = {{ tr_json | tojson | safe }};
+window.TR = function(k){ return (window._TRJSON && Object.prototype.hasOwnProperty.call(window._TRJSON, k)) ? window._TRJSON[k] : k; };
+(function(){
+  function fitSidebar(){
+    var sb = document.querySelector('.sidebar');
+    if(!sb || window.innerWidth <= 768) return;
+    var items = sb.querySelectorAll('.nav-item');
+    var max = 0;
+    var cs = null;
+    for(var i=0;i<items.length;i++){
+      var el = items[i];
+      if(!cs) cs = getComputedStyle(el);
+      var span = document.createElement('span');
+      span.style.cssText = 'position:absolute;visibility:hidden;white-space:nowrap;font-size:'+cs.fontSize+';font-family:'+cs.fontFamily+';font-weight:'+cs.fontWeight+';';
+      span.textContent = el.textContent;
+      document.body.appendChild(span);
+      var w = span.getBoundingClientRect().width;
+      document.body.removeChild(span);
+      var pad = parseFloat(getComputedStyle(el).paddingLeft) + parseFloat(getComputedStyle(el).paddingRight);
+      if(w + pad > max) max = w + pad;
+    }
+    var ico = sb.querySelector('.nav-ico');
+    if(ico){ max += ico.getBoundingClientRect().width + 10; }
+    var root = getComputedStyle(document.documentElement).getPropertyValue('--sidebar-width');
+    var base = parseInt(root, 10) || 216;
+    var w = Math.max(base, Math.min(Math.ceil(max) + 28, 560));
+    if(w !== base){ document.documentElement.style.setProperty('--sidebar-width', w + 'px'); }
+  }
+  window.addEventListener('load', fitSidebar);
+  window.addEventListener('resize', fitSidebar);
+})();
+</script>
+</head>
+<body>
+{% if cur_user %}
+<div class="layout">
+  <aside class="sidebar">
+    <div class="brand" {% if brand and brand.font_family %}style="font-family:{{ brand.font_family }}"{% endif %}>
+      {% if brand and brand.logo_file %}
+      <img class="brand-logo" src="{{ url_for('media', fname=brand.logo_file) }}" alt="logo" style="height:{{ brand.logo_height or 40 }}px;width:auto">
+      {% else %}<div class="brand-icon"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h0a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h0a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v0a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></div>{% endif %}
+      <div class="brand-text">
+        <div class="brand-name" style="font-size:{{ brand.title_size or 16 }}px;{% if brand.title_color %}color:{{ brand.title_color }}{% endif %}">{{ brand.title if brand else 'Spare Parts Management System' }}</div>
+        <div class="brand-sub" style="font-size:{{ brand.subtitle_size or 11 }}px;{% if brand.subtitle_color %}color:{{ brand.subtitle_color }}{% endif %}">{{ brand.subtitle if brand and brand.subtitle else 'Spare Parts System' }}</div>
+      </div>
+    </div>
+    <nav class="nav">
+      {% if can('dashboard') %}      <a class="nav-item {{ 'active' if request.path == '/dashboard' }}" href="{{ url_for('dashboard') }}"><span class="nav-ico"><svg viewBox="0 0 24 24" width="{{ nav_style.icon_size }}" height="{{ nav_style.icon_size }}" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg></span>{{ tr('nav_dashboard') }}</a>{% endif %}
+      {% if can('parts_manage') %}<a class="nav-item {{ 'active' if request.path == '/locations' }}" href="{{ url_for('locations_page') }}"><span class="nav-ico"><svg viewBox="0 0 24 24" width="{{ nav_style.icon_size }}" height="{{ nav_style.icon_size }}" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 2 7l10 5 10-5-10-5z"/><path d="M2 12l10 5 10-5"/><path d="M2 17l10 5 10-5"/></svg></span>{{ tr('nav_locations') }}</a>{% endif %}
+      {% if can('parts_manage') %}<a class="nav-item {{ 'active' if request.path == '/parts/manage' }}" href="{{ url_for('parts_manage_page') }}"><span class="nav-ico"><svg viewBox="0 0 24 24" width="{{ nav_style.icon_size }}" height="{{ nav_style.icon_size }}" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8M8 17h5"/></svg></span>{{ tr('nav_parts_manage') }}</a>{% endif %}
+      <a class="nav-item {{ 'active' if request.path == '/parts' }}" href="{{ url_for('parts_page') }}"><span class="nav-ico"><svg viewBox="0 0 24 24" width="{{ nav_style.icon_size }}" height="{{ nav_style.icon_size }}" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg></span>{{ tr('nav_parts') }}</a>
+      {% if can('stale') %}<a class="nav-item {{ 'active' if request.path == '/stale' }}" href="{{ url_for('stale_page') }}"><span class="nav-ico"><svg viewBox="0 0 24 24" width="{{ nav_style.icon_size }}" height="{{ nav_style.icon_size }}" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22c4.97 0 9-4.03 9-9s-4.03-9-9-9-9 4.03-9 9 4.03 9 9 9z"/><path d="M12 7v5l3 3"/></svg></span>{{ tr('nav_stale') }}</a>{% endif %}
+      {% if can('apply') %}<a class="nav-item {{ 'active' if request.path == '/applications' }}" href="{{ url_for('applications_page') }}"><span class="nav-ico"><svg viewBox="0 0 24 24" width="{{ nav_style.icon_size }}" height="{{ nav_style.icon_size }}" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3 4 7l4 4"/><path d="M4 7h16"/><path d="m16 21 4-4-4-4"/><path d="M20 17H4"/></svg></span>{{ tr('nav_apply') }}</a>{% endif %}
+      {% if can('stock_inout') %}<a class="nav-item {{ 'active' if request.path == '/inout' }}" href="{{ url_for('inout_page') }}"><span class="nav-ico"><svg viewBox="0 0 24 24" width="{{ nav_style.icon_size }}" height="{{ nav_style.icon_size }}" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8v8a2 2 0 0 1-1 1.73l-7 4a2 2 0 0 1-2 0l-7-4A2 2 0 0 1 3 16V8a2 2 0 0 1 1-1.73l7-4a2 2 0 0 1 2 0l7 4A2 2 0 0 1 21 8z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></svg></span>{{ tr('nav_inout') }}</a>{% endif %}
+      {% if can('approve') %}<a class="nav-item {{ 'active' if request.path == '/approval' }}" href="{{ url_for('approval_page') }}"><span class="nav-ico"><svg viewBox="0 0 24 24" width="{{ nav_style.icon_size }}" height="{{ nav_style.icon_size }}" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.1V12a10 10 0 1 1-5.9-9.1"/><path d="m9 11 3 3L22 4"/></svg></span>{{ tr('nav_approval') }}</a>{% endif %}
+      {% if can('departments') %}<a class="nav-item {{ 'active' if request.path == '/departments' }}" href="{{ url_for('departments_page') }}"><span class="nav-ico"><svg viewBox="0 0 24 24" width="{{ nav_style.icon_size }}" height="{{ nav_style.icon_size }}" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="2" width="16" height="20" rx="2"/><path d="M9 22v-4h6v4"/><path d="M8 6h.01M12 6h.01M16 6h.01M8 10h.01M12 10h.01M16 10h.01M8 14h.01M12 14h.01M16 14h.01"/></svg></span>{{ tr('nav_departments') }}</a>{% endif %}
+      {% if can('lines_equip') %}<a class="nav-item {{ 'active' if request.path == '/lines' }}" href="{{ url_for('lines_page') }}"><span class="nav-ico"><svg viewBox="0 0 24 24" width="{{ nav_style.icon_size }}" height="{{ nav_style.icon_size }}" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 20h20"/><path d="M4 20V9l5 3V9l6 3V5h5v15"/></svg></span>{{ tr('nav_lines') }}</a>{% endif %}
+      {% if can('user_manage') %}<a class="nav-item {{ 'active' if request.path == '/users' }}" href="{{ url_for('users_page') }}"><span class="nav-ico"><svg viewBox="0 0 24 24" width="{{ nav_style.icon_size }}" height="{{ nav_style.icon_size }}" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg></span>{{ tr('nav_users') }}</a>{% endif %}
+      {% if can('perm_config') %}<a class="nav-item {{ 'active' if request.path == '/permissions' }}" href="{{ url_for('permissions_page') }}"><span class="nav-ico"><svg viewBox="0 0 24 24" width="{{ nav_style.icon_size }}" height="{{ nav_style.icon_size }}" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="10" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></span>{{ tr('nav_permissions') }}</a>{% endif %}
+      {% if cur_user and cur_user.role == 'admin' %}<a class="nav-item {{ 'active' if request.path == '/settings' }}" href="{{ url_for('system_settings') }}"><span class="nav-ico"><svg viewBox="0 0 24 24" width="{{ nav_style.icon_size }}" height="{{ nav_style.icon_size }}" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h0a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h0a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v0a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></span>{{ tr('nav_settings') }}</a>{% endif %}
+      {% if cur_user and cur_user.role in ('admin','warehouse','manager') %}<a class="nav-item {{ 'active' if request.path == '/restore' }}" href="{{ url_for('restore_page') }}"><span class="nav-ico"><svg viewBox="0 0 24 24" width="{{ nav_style.icon_size }}" height="{{ nav_style.icon_size }}" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l3 3"/></svg></span>{{ tr('nav_restore') }}</a>{% endif %}
+      {% if cur_user and cur_user.role == 'admin' %}<a class="nav-item {{ 'active' if request.path == '/screen/config' }}" href="{{ url_for('screen_config') }}"><span class="nav-ico"><svg viewBox="0 0 24 24" width="{{ nav_style.icon_size }}" height="{{ nav_style.icon_size }}" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3"/><path d="M1 14h6M9 8h6M17 16h6"/></svg></span>{{ tr('nav_screen_config') }}</a>{% endif %}
+      <a class="nav-item" href="{{ url_for('screen_page') }}" target="_blank"><span class="nav-ico"><svg viewBox="0 0 24 24" width="{{ nav_style.icon_size }}" height="{{ nav_style.icon_size }}" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg></span>{{ tr('nav_screen') }}</a>
+      {% if cur_user and cur_user.role == 'admin' %}<a class="nav-item {{ 'active' if request.path == '/parts/recycle' }}" href="{{ url_for('recycle_page') }}"><span class="nav-ico"><svg viewBox="0 0 24 24" width="{{ nav_style.icon_size }}" height="{{ nav_style.icon_size }}" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="m19 6-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg></span>{{ tr('nav_recycle') }}</a>{% endif %}
+    </nav>
+    <div class="sidebar-foot">v1.0 · {{ tr('misc_version') }}</div>
+  </aside>
+  <div class="main">
+    <header class="topbar">
+      {% if cur_user.role == 'guest' %}<div class="guest-banner">{{ tr('访客模式') }}{{ tr('：') }}AD {{ tr('账号不在白名单') }}{{ tr('，') }}{{ tr('仅可查阅备件与呆滞物料') }}{{ tr('（') }}{{ session.get('guest_ad_user','') }}{{ tr('）') }}</div>{% endif %}
+      <div class="topbar-title">{% block page_title %}{% endblock %}</div>
+      <div class="topbar-user">
+        <span class="role-badge role-{{ cur_user.role }}">{{ tr(ROLE_NAMES[cur_user.role]) }}</span>
+        <span class="user-name">{{ cur_user.display_name }}</span>
+        {% if cur_user.role != 'guest' %}<a class="btn btn-xs" href="{{ url_for('change_password') }}">{{ tr('page_password') }}</a>{% endif %}
+        <a class="btn btn-xs btn-danger" href="{{ url_for('logout') }}">{{ tr('nav_logout') }}</a>
+      </div>
+    </header>
+    {% with msgs = get_flashed_messages(with_categories=true) %}
+      {% if msgs %}
+        <div class="flash-area">
+          {% for cat, m in msgs %}
+            <div class="flash flash-{{ cat }}">{{ tr(m) }}</div>
+          {% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
+    <div class="content">
+      {% block content %}{% endblock %}
+    </div>
+  </div>
+</div>
+{% else %}
+  {% block fullpage %}{% endblock %}
+{% endif %}
+<script src="{{ url_for('static', filename='js/app.js') }}"></script>
+{% block scripts %}{% endblock %}
+<script>
+/* 通用：AJAX 无刷新保存（settings / screen_config 等使用 form.ajax-form） */
+function smtToast(msg, ok){
+  var area = document.querySelector('.flash-area');
+  if(!area){ area = document.createElement('div'); area.className = 'flash-area'; document.body.appendChild(area); }
+  var el = document.createElement('div');
+  el.className = 'flash ' + (ok ? 'flash-success' : 'flash-danger');
+  el.textContent = msg;
+  area.appendChild(el);
+  setTimeout(function(){ el.remove(); }, 4500);
+}
+function applyTheme(t, nav){
+  var s = document.documentElement.style;
+  if(t){
+    if(t.primary) s.setProperty('--primary', t.primary);
+    if(t.primary_d) s.setProperty('--primary-d', t.primary_d);
+    if(t.bg) s.setProperty('--bg', t.bg);
+    if(t.sidebar_text) s.setProperty('--sidebar-text', t.sidebar_text);
+  }
+  if(nav){
+    if(nav.sidebar_top) s.setProperty('--sidebar-top', nav.sidebar_top);
+    if(nav.sidebar_bottom) s.setProperty('--sidebar-bottom', nav.sidebar_bottom);
+    if(nav.menu_width) s.setProperty('--sidebar-width', nav.menu_width + 'px');
+  }
+}
+document.querySelectorAll('form.ajax-form').forEach(function(f){
+  f.addEventListener('submit', function(ev){
+    ev.preventDefault();
+    var btn = ev.submitter || f.querySelector('button[type=submit], input[type=submit]');
+    if(btn) btn.disabled = true;
+    var url = f.getAttribute('action') || location.pathname;
+    var fd = new FormData(f);
+    /* 补上被点击的提交按钮（new FormData 不会自动带 submitter） */
+    if(btn && btn.name){ fd.append(btn.name, btn.value || '1'); }
+    fetch(url, {method:'POST', body:fd, headers:{'X-Requested-With':'XMLHttpRequest'}})
+      .then(function(r){ return r.json().catch(function(){ return {ok:false, msg:TR('响应格式异常')}; }); })
+      .then(function(d){
+        if(btn) btn.disabled = false;
+        smtToast(d.msg || (d.ok ? TR('已保存') : TR('保存失败')), d.ok);
+        if(d.backups_html && document.getElementById('backups-box')){ document.getElementById('backups-box').innerHTML = d.backups_html; }
+        if(d.theme){ applyTheme(d.theme, d.nav); }
+        if(d.db_path){ var ip = document.querySelector('input[name=db_path]'); if(ip) ip.value = d.db_path; }
+        if(d.msg && d.msg.indexOf(TR('重启')) >= 0){ setTimeout(function(){ location.reload(); }, 3500); }
+      })
+      .catch(function(){ if(btn) btn.disabled = false; smtToast('{{ tr('网络错误') }}{{ tr('，') }}{{ tr('保存失败') }}', false); });
+  });
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,191 @@
+{% extends "base.html" %}
+{% block title %}{{ tr('page_recycle') }} - Spare Parts Management System{% endblock %}
+{% block page_title %}>{{ tr('page_recycle') }}{% endblock %}
+{% block content %}
+
+<div class="card">
+  <div class="card-title">
+    {{ tr('回收站') }}{{ tr('（') }}{{ tr('仅管理员可见') }}{{ tr('）') }}
+    <span class="muted">{{ tr('删除的备件') }}/{{ tr('货架位置') }}/{{ tr('部门') }}/{{ tr('用户') }}{{ tr('：') }}{{ tr('进入回收站，超保留期自动彻底清除；恢复或彻底删除由管理员操作') }}</span>
+  </div>
+
+  <div class="card" style="margin-bottom:12px;padding:12px">
+    <form class="inline-form" method="post" action="{{ url_for('recycle_settings') }}" style="margin:0">
+      <label class="muted">{{ tr('保留天数') }}{{ tr('（超期自动彻底清除）') }}{{ tr('：') }}</label>
+      <input class="f-input" type="number" name="days" value="{{ days }}" min="1" max="365"
+             style="max-width:90px" required>
+      <button class="btn btn-xs" type="submit">{{ tr('btn_save') }}</button>
+      <span class="muted small">{{ tr('当前') }} {{ days }} {{ tr('天') }}</span>
+    </form>
+  </div>
+
+  {% if cover_pending and cover_pending.item_type %}
+  <div class="card" style="margin-bottom:12px;padding:12px;border:1px solid #FAAD14;background:#FFFBE6">
+    <b>⚠ {{ tr('有相同信息已存在，恢复时会覆盖已有信息') }}{{ tr('，') }}{{ tr('请确认') }}</b>
+    <div class="muted small" style="margin-top:4px">
+      {{ tr('正在恢复的') }}{{ {'location': tr('货架位置'), 'department': tr('部门'), 'user': tr('用户')}[cover_pending.item_type] }}{{ tr('与现存记录信息相同') }}{{ tr('。') }}
+      {{ tr('确认覆盖后将删除现有同名信息，恢复回收站中的旧记录') }}{{ tr('。') }}
+    </div>
+    <div style="margin-top:8px">
+      <form method="post" action="{{ url_for('recycle_cover_confirm') }}" style="display:inline">
+        <button class="btn btn-xs btn-danger" type="submit">{{ tr('确认覆盖并恢复') }}</button>
+      </form>
+      <form method="post" action="{{ url_for('recycle_cover_cancel') }}" style="display:inline">
+        <button class="btn btn-xs" type="submit">{{ tr('btn_cancel') }}</button>
+      </form>
+    </div>
+  </div>
+  {% endif %}
+
+  {% for g in groups %}
+  <div class="card" style="margin-bottom:14px">
+    <div class="card-title" style="font-size:14px">{{ g.label }}
+      <span class="muted">{{ tr('（') }}{{ g.rows|length }} {{ tr('条') }}{{ tr('）') }}</span>
+      {% if g.rows %}
+      <form method="post" action="{{ url_for('recycle_purge_all_other') }}" style="float:right;margin-left:8px"
+            onsubmit="return confirm(TR('确定清空') + {{ g.label }} + TR('回收站？所有记录将彻底删除{{ tr('，') }}不可恢复') + '！')">
+        <input type="hidden" name="type" value="{{ g.type }}">
+        <button class="btn btn-xs btn-danger" type="submit">{{ tr('清空本类') }}</button>
+      </form>
+      {% endif %}
+    </div>
+
+    {% if g.type == 'parts' %}
+    <div class="table-wrap">
+      <table class="table">
+        <thead><tr>
+          <th>{{ tr('th_code') }}</th><th>{{ tr('th_name') }}</th><th>{{ tr('分类') }}</th><th>{{ tr('规格') }}</th><th>{{ tr('单位') }}</th>
+          <th>{{ tr('删除时间') }}</th><th>{{ tr('到期自动清除') }}</th><th>{{ tr('原库位') }}</th><th>{{ tr('th_ops') }}</th>
+        </tr></thead>
+        <tbody>
+          {% for r in g.rows %}
+          <tr>
+            <td class="mono">{{ r.part_code }}</td>
+            <td>{{ r.name }}</td>
+            <td>{{ r.category or '-' }}</td>
+            <td class="small">{{ r.spec or '-' }}</td>
+            <td>{{ r.unit or '-' }}</td>
+            <td class="mono small">{{ r.deleted_at }}</td>
+            <td class="mono small">
+              {% if r.expired %}<span class="badge badge-danger">{{ tr('已到期') }}</span>
+              {% else %}{{ r.expire or '-' }}{% endif %}
+            </td>
+            <td class="mono small">{{ tr(r.location_text or '待定') }} }}</td>
+            <td style="white-space:nowrap">
+              <form method="post" action="{{ url_for('recycle_restore') }}" style="display:inline">
+                <input type="hidden" name="pid" value="{{ r.id }}">
+                <button class="btn btn-xs" type="submit">{{ tr('恢复') }}</button>
+              </form>
+              <form method="post" action="{{ url_for('recycle_purge') }}" style="display:inline"
+                    onsubmit="return confirm('{{ tr('确定彻底删除') }} [{{ r.part_code }}]{{ tr('不可恢复') }}！')">
+                <input type="hidden" name="pid" value="{{ r.id }}">
+                <button class="btn btn-xs btn-danger" type="submit">{{ tr('彻底删除') }}</button>
+              </form>
+            </td>
+          </tr>
+          {% else %}<tr><td colspan="9" class="muted center">{{ tr('回收站为空') }}</td></tr>{% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div class="muted small" style="margin-top:8px">
+      {{ tr('说明') }}{{ tr('：') }}{{ tr('恢复时若原固定库位已被其他备件占用，该备件位置将置为') }}{{ tr('「') }}{{ tr('待定') }}{{ tr('」') }}{{ tr('；') }}{{ tr('请恢复后在') }}{{ tr('「') }}{{ tr('备件信息维护') }}{{ tr('」') }}{{ tr('中重新指定库位') }}{{ tr('。') }}
+    </div>
+
+    {% elif g.type == 'location' %}
+    <div class="table-wrap">
+      <table class="table">
+        <thead><tr><th>{{ tr('仓库号') }}</th><th>{{ tr('货架号') }}</th><th>{{ tr('货位号') }}</th><th>{{ tr('格位号') }}</th><th>{{ tr('删除时间') }}</th><th>{{ tr('到期自动清除') }}</th><th>{{ tr('th_ops') }}</th></tr></thead>
+        <tbody>
+          {% for r in g.rows %}
+          <tr>
+            <td class="mono">{{ r.data_obj.warehouse }}</td>
+            <td class="mono">{{ r.data_obj.rack }}</td>
+            <td class="mono">{{ r.data_obj.shelf }}</td>
+            <td class="mono small">{{ r.data_obj.bin or tr('整货位') }}</td>
+            <td class="mono small">{{ r.deleted_at }}</td>
+            <td class="mono small">{% if r.expired %}<span class="badge badge-danger">{{ tr('已到期') }}</span>{% else %}{{ r.expire or '-' }}{% endif %}</td>
+            <td style="white-space:nowrap">
+              <form method="post" action="{{ url_for('recycle_restore_other') }}" style="display:inline">
+                <input type="hidden" name="type" value="location">
+                <input type="hidden" name="item_id" value="{{ r.item_id }}">
+                <button class="btn btn-xs" type="submit">{{ tr('恢复') }}</button>
+              </form>
+              <form method="post" action="{{ url_for('recycle_purge_other') }}" style="display:inline"
+                    onsubmit="return confirm('{{ tr('确定彻底删除') }} [{{ r.label }}]{{ tr('不可恢复') }}！')">
+                <input type="hidden" name="type" value="location">
+                <input type="hidden" name="rid" value="{{ r.id }}">
+                <button class="btn btn-xs btn-danger" type="submit">{{ tr('彻底删除') }}</button>
+              </form>
+            </td>
+          </tr>
+          {% else %}<tr><td colspan="7" class="muted center">{{ tr('本类回收站为空') }}</td></tr>{% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    {% elif g.type == 'department' %}
+    <div class="table-wrap">
+      <table class="table">
+        <thead><tr><th>{{ tr('部门名称') }}</th><th>{{ tr('备注') }}</th><th>{{ tr('删除时间') }}</th><th>{{ tr('到期自动清除') }}</th><th>{{ tr('th_ops') }}</th></tr></thead>
+        <tbody>
+          {% for r in g.rows %}
+          <tr>
+            <td>{{ r.data_obj.name }}</td>
+            <td class="small">{{ r.data_obj.remark or '-' }}</td>
+            <td class="mono small">{{ r.deleted_at }}</td>
+            <td class="mono small">{% if r.expired %}<span class="badge badge-danger">{{ tr('已到期') }}</span>{% else %}{{ r.expire or '-' }}{% endif %}</td>
+            <td style="white-space:nowrap">
+              <form method="post" action="{{ url_for('recycle_restore_other') }}" style="display:inline">
+                <input type="hidden" name="type" value="department">
+                <input type="hidden" name="item_id" value="{{ r.item_id }}">
+                <button class="btn btn-xs" type="submit">{{ tr('恢复') }}</button>
+              </form>
+              <form method="post" action="{{ url_for('recycle_purge_other') }}" style="display:inline"
+                    onsubmit="return confirm('{{ tr('确定彻底删除') }} [{{ r.label }}]{{ tr('不可恢复') }}！')">
+                <input type="hidden" name="type" value="department">
+                <input type="hidden" name="rid" value="{{ r.id }}">
+                <button class="btn btn-xs btn-danger" type="submit">{{ tr('彻底删除') }}</button>
+              </form>
+            </td>
+          </tr>
+          {% else %}<tr><td colspan="5" class="muted center">{{ tr('本类回收站为空') }}</td></tr>{% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    {% else %}
+    <div class="table-wrap">
+      <table class="table">
+        <thead><tr><th>{{ tr('fld_username') }}</th><th>{{ tr('姓名') }}</th><th>{{ tr('fld_role') }}</th><th>{{ tr('fld_department') }}</th><th>{{ tr('删除时间') }}</th><th>{{ tr('到期自动清除') }}</th><th>{{ tr('th_ops') }}</th></tr></thead>
+        <tbody>
+          {% for r in g.rows %}
+          <tr>
+            <td class="mono">{{ r.data_obj.username }}</td>
+            <td>{{ r.data_obj.display_name }}</td>
+            <td>{{ r.data_obj.role }}</td>
+            <td>{{ r.data_obj.department or '-' }}</td>
+            <td class="mono small">{{ r.deleted_at }}</td>
+            <td class="mono small">{% if r.expired %}<span class="badge badge-danger">{{ tr('已到期') }}</span>{% else %}{{ r.expire or '-' }}{% endif %}</td>
+            <td style="white-space:nowrap">
+              <form method="post" action="{{ url_for('recycle_restore_other') }}" style="display:inline">
+                <input type="hidden" name="type" value="user">
+                <input type="hidden" name="item_id" value="{{ r.item_id }}">
+                <button class="btn btn-xs" type="submit">{{ tr('恢复') }}</button>
+              </form>
+              <form method="post" action="{{ url_for('recycle_purge_other') }}" style="display:inline"
+                    onsubmit="return confirm('{{ tr('确定彻底删除') }} [{{ r.label }}]{{ tr('不可恢复') }}！')">
+                <input type="hidden" name="type" value="user">
+                <input type="hidden" name="rid" value="{{ r.id }}">
+                <button class="btn btn-xs btn-danger" type="submit">{{ tr('彻底删除') }}</button>
+              </form>
+            </td>
+          </tr>
+          {% else %}<tr><td colspan="7" class="muted center">{{ tr('本类回收站为空') }}</td></tr>{% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% endif %}
+  </div>
+  {% endfor %}
+</div>
+{% endblock %}

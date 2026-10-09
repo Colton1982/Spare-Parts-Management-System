@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block title %}{{ tr('page_locations') }} - Spare Parts Management System{% endblock %}
+{% block page_title %}>{{ tr('page_locations') }}{% endblock %}
+{% block content %}
+
+<div class="card">
+  <div class="card-title">{{ tr('建立货架位置（仓库号 → 货架号 → 货位号 必填，格位号可空）') }}</div>
+  <form class="inline-form" method="post" action="{{ url_for('location_add') }}">
+    <input class="f-input" name="warehouse" placeholder="{{ tr('仓库号 *') }}" maxlength="20" required style="width:110px">
+    <input class="f-input" name="rack" placeholder="{{ tr('货架号 *') }}" maxlength="20" required style="width:110px">
+    <input class="f-input" name="shelf" placeholder="{{ tr('货位号 *') }}" maxlength="20" required style="width:110px">
+    <input class="f-input" name="bin" placeholder="{{ tr('格位号(可空)') }}" maxlength="20" style="width:110px">
+    <input class="f-input" name="remark" placeholder="{{ tr('备注(可空)') }}" maxlength="50">
+    <button class="btn btn-primary" type="submit">{{ tr('建立位置') }}</button>
+  </form>
+  <div class="muted small">{{ tr('格位号留空表示整个货位；每个位置最多放置一种备件，占用位置不可删除、不可重复配置。备件编辑时可选择位置。') }}</div>
+</div>
+
+<div class="card">
+  <div class="card-title" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px"><span>{{ tr('货架位置列表') }}{{ tr('（') }}{{ tr('共') }} {{ locations|length }} {{ tr('个') }}{{ tr('）') }}</span><a class="btn btn-xs" href="{{ url_for('audit_page', type='rack') }}">{{ tr('操作记录') }}</a></div>
+  <div class="table-wrap">
+    <table class="table">
+      <thead><tr>
+        <th>{{ tr('仓库号') }}</th><th>{{ tr('货架号') }}</th><th>{{ tr('货位号') }}</th><th>{{ tr('格位号') }}</th><th>{{ tr('位置全称') }}</th><th>{{ tr('占用备件') }}</th><th>{{ tr('备注') }}</th><th>{{ tr('th_ops') }}</th>
+      </tr></thead>
+      <tbody>
+        {% for l in locations %}
+        <tr>
+          <td class="mono">{{ l.warehouse }}</td>
+          <td class="mono">{{ l.rack }}</td>
+          <td class="mono">{{ l.shelf }}</td>
+          <td class="mono">{{ l.bin or tr('整货位') }}</td>
+          <td class="mono">{{ l.warehouse }}-{{ l.rack }}-{{ l.shelf }}{% if l.bin %}-{{ l.bin }}{% endif %}</td>
+          <td>
+            {% if l.part_id %}<a href="{{ url_for('parts_manage_page', kw=l.part_code) }}">{{ l.part_code }} · {{ l.name }}</a>
+            {% else %}<span class="badge badge-ok">{{ tr('空闲') }}</span>{% endif %}
+          </td>
+          <td class="muted">{{ l.remark or '-' }}</td>
+          <td class="ops">
+            {% if not l.part_id %}
+            <button class="btn btn-xs btn-danger" onclick="delLoc({{ l.id }}, '{{ l.warehouse }}-{{ l.rack }}-{{ l.shelf }}-{{ l.bin }}')">{{ tr('btn_delete') }}</button>
+            {% else %}<span class="muted small">{{ tr('使用中') }}</span>{% endif %}
+          </td>
+        </tr>
+        {% else %}<tr><td colspan="8" class="muted center">{{ tr('尚未建立货架位置，请在上方填写') }}</td></tr>{% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+function delLoc(lid, name){
+  if(!confirm(TR('确定删除位置')+' '+name+TR(' ？\n删除后进入回收站{{ tr('（') }}')+TR('管理员可恢复')+'{{ tr('）') }}')) return;
+  const f=document.createElement('form'); f.method='post'; f.action='/locations/'+lid+'/delete';
+  document.body.appendChild(f); f.submit();
+}
+</script>
+{% endblock %}

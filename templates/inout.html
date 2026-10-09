@@ -1,0 +1,495 @@
+{% extends "base.html" %}
+{% block title %}{{ tr('page_inout') }} - Spare Parts Management System{% endblock %}
+{% block page_title %}>{{ tr('page_inout') }}{% endblock %}
+{% block content %}
+
+<div class="card">
+  <div class="card-title">{{ tr('直接出入库（出库与申请出库业务一致：数量/申请人/线别/设备/原因，贵重自动走审批）') }}</div>
+  <form class="inline-form" method="post" action="{{ url_for('inout_do') }}" onsubmit="return beforeIoSubmit()" style="flex-wrap:wrap;gap:8px">
+    <input type="hidden" name="part_id" id="io-part-id">
+    <span class="part-pick">
+      <button type="button" class="btn" onclick="PartPicker.show('io-part-id','io-part-name', onIoPartPick)">{{ tr('🔍 选择备件…') }}</button>
+      <span id="io-part-name" class="muted">{{ tr('未选择') }}</span>
+    </span>
+    <select class="f-input" name="tx_type" id="io-type" required onchange="ioTypeChange()">
+      <option value="in">{{ tr('type_in') }}</option>
+      <option value="out">{{ tr('type_out') }}</option>
+    </select>
+    <input class="f-input" type="number" name="quantity" id="io-qty" step="0.001" min="0.01" placeholder="{{ tr('数量') }}" required>
+    <span id="io-out-fields" style="display:none">
+      <select class="f-input" name="applicant_id" id="io-applicant" style="max-width:150px">
+        {% for u in users %}<option value="{{ u.id }}" {{ 'selected' if u.id==cur_uid }}>{{ u.display_name or u.username }}{% if u.department %}{{ tr('（') }}{{ u.department }}{{ tr('）') }}{% endif %}</option>{% endfor %}
+      </select>
+      <select class="f-input" name="use_line" id="io-line" onchange="ioLineChange()" style="max-width:130px"><option value="">{{ tr('线别(可空)') }}</option>{% for l in lines %}<option value="{{ l.name }}">{{ l.name }}</option>{% endfor %}</select>
+      <select class="f-input" name="use_device" id="io-device" style="max-width:140px"><option value="">{{ tr('设备(可空)') }}</option></select>
+    </span>
+    <span id="io-loc-wrap">
+      <select class="f-input" name="location_id" id="io-loc" required onchange="ioLocChange()"><option value="">{{ tr('先选择备件…') }}</option></select>
+    </span>
+    <span id="io-loc-new-wrap" style="display:none">
+      <span class="loc-cascade" style="display:inline-flex">
+        <select class="f-input" id="io-new-wh" onchange="ioNewWh()"><option value="">{{ tr('仓库号…') }}</option></select>
+        <select class="f-input" id="io-new-rack" onchange="ioNewRack()"><option value="">{{ tr('货架号…') }}</option></select>
+        <select class="f-input" id="io-new-shelf" onchange="ioNewShelf()"><option value="">{{ tr('货位号…') }}</option></select>
+        <select class="f-input" id="io-new-bin" onchange="ioNewPick()"><option value="">{{ tr('格位号…') }}</option></select>
+      </span>
+      <input type="hidden" name="new_location_id" id="io-new-loc-id">
+    </span>
+    <input class="f-input" type="text" name="reason" id="io-reason" placeholder="{{ tr('原因') }}/{{ tr('备注') }}{{ tr('（') }}{{ tr('出库请填写使用原因') }}{{ tr('）') }}" style="min-width:200px">
+    <span id="io-approver-wrap" style="display:none">
+      <select class="f-input" name="approver_id" id="io-approver" style="max-width:170px"><option value="">{{ tr('审批经理…') }}</option>{% for m in managers %}<option value="{{ m.id }}">{{ m.display_name }}{% if m.department %}{{ tr('（') }}{{ m.department }}{{ tr('）') }}{% endif %}</option>{% endfor %}</select>
+    </span>
+    <button class="btn btn-primary" type="submit">{{ tr('确认操作') }}</button>
+  </form>
+  <div class="muted small">{{ tr('备件选择：点击「选择备件」弹出搜索框。') }}<b>{{ tr('type_out') }}</b>{{ tr('：与申请出库一致，需填数量、申请人、使用线别/设备、原因；非贵重直接扣库存（生成申请单记录），') }}<b>{{ tr('贵重备件自动提交审批') }}</b>{{ tr('，审批通过后由仓库出库。') }}<b>{{ tr('type_in') }}</b>{{ tr('：仓库直接入库，可选现有库位或新库位（仓库-货架-货位-格位）。整数类备件数量只能填正整数，小数类可填小数。') }}</div>
+</div>
+
+<div class="card">
+  <div class="card-title">{{ tr('待处理申请单（执行 / 驳回 / 撤销审批）') }}</div>
+  <div class="table-wrap">
+    <table class="table">
+      <thead><tr>
+        <th>{{ tr('th_no') }}</th><th>{{ tr('th_time') }}</th><th>{{ tr('th_part') }}</th><th>{{ tr('th_type') }}</th><th>{{ tr('th_quantity') }}</th><th>{{ tr('th_applicant') }}</th>
+        <th>{{ tr('位置') }}</th><th>{{ tr('th_status') }}</th><th>{{ tr('th_ops') }}</th>
+      </tr></thead>
+      <tbody>
+        {% for a in pending_apps %}
+        <tr>
+          <td class="mono">{{ a.app_no }}</td>
+          <td class="mono">{{ a.created_at }}</td>
+          <td>{{ a.part_code }}<br><span class="muted">{{ a.name }}</span>
+            {% if a.is_valuable %}<span class="badge badge-val">{{ tr('status_valuable') }}</span>{% endif %}
+            {% if a.app_type=='out' and a.line_name %}<br><span class="muted small">{{ tr('线别') }}{{ tr('：') }}{{ a.line_name }} {{ tr('｜') }} {{ tr('设备') }}{{ tr('：') }}{{ a.device_name or '—' }}</span>{% endif %}
+            {% if a.app_type=='out' and a.reason %}<br><span class="muted small">{{ tr('领出原因') }}{{ tr('：') }}{{ a.reason }}</span>{% endif %}</td>
+          <td>
+            {% if a.app_type=='in' %}<span class="badge badge-ok">{{ tr('type_in') }}</span>
+            {% elif a.app_type=='transfer' %}<span class="badge badge-info">{{ tr('type_transfer') }}</span>
+            {% else %}<span class="badge badge-danger">{{ tr('type_out') }}</span>{% endif %}
+          </td>
+          <td class="num">{{ a.quantity }} {{ a.unit }}</td>
+          <td>{{ a.app_name or '-' }}</td>
+          <td class="mono small">
+            {% if a.app_type=='transfer' %}
+              <span class="muted">{{ tr(a.from_loc_text or tr('待定')) }}</span> {{ tr('→') }} <b>{{ tr(a.to_loc_text or tr('待定')) }}</b>
+            {% else %}
+              {% if a.all_locs_text %}{{ a.all_locs_text }}{% else %}{{ a.location_text or '-' }}{% endif %}
+            {% endif %}
+          </td>
+          <td>
+            {% if a.status=='cancel_req' %}<span class="badge badge-warn">{{ tr('status_cancel_req') }}</span>
+            {% elif a.status=='approved' %}<span class="badge badge-info">{{ tr('status_approved') }}</span>
+            {% else %}<span class="badge badge-info">{{ tr('status_pending') }}</span>{% endif %}
+          </td>
+          <td class="ops">
+            {% if a.status=='cancel_req' %}
+              {% if a.applicant_id != cur_uid %}
+              <button class="btn btn-xs" onclick="openCancelApprove({{ a.id }}, '{{ a.app_no }}')">{{ tr('批准撤销') }}</button>
+              <button class="btn btn-xs btn-danger" onclick="openCancelReject({{ a.id }}, '{{ a.app_no }}')">{{ tr('驳回撤销') }}</button>
+              {% else %}<span class="muted small">{{ tr('本人撤销请求，请其他仓管处理') }}</span>{% endif %}
+            {% elif a.app_type=='out' and a.is_valuable and a.status!='approved' %}
+              <span class="muted small">{{ tr('status_pending') }}</span>
+            {% elif a.app_type=='transfer' %}
+              <button class="btn btn-xs" onclick="openTransferExec({{ a.id }}, '{{ a.app_no }}', '{{ a.part_code }}', '{{ a.from_loc_text or tr('待定') }}', '{{ a.to_loc_text or tr('待定') }}')">{{ tr('执行调库') }}</button>
+              <button class="btn btn-xs btn-danger" onclick="openReject({{ a.id }}, '{{ a.app_no }}')">{{ tr('btn_reject') }}</button>
+            {% else %}
+              <button class="btn btn-xs" data-aid="{{ a.id }}" data-no="{{ a.app_no|e }}" data-pid="{{ a.part_id }}"
+                data-code="{{ a.part_code|e }}" data-qty="{{ a.quantity }}" data-type="{{ a.app_type|e }}"
+                data-loc="{{ (a.all_locs_text or a.location_text or '')|e }}"
+                data-line="{{ (a.line_name or '')|e }}" data-device="{{ (a.device_name or '')|e }}"
+                data-reason="{{ (a.reason or '')|e }}" onclick="openExecFrom(this)">{{ tr('btn_execute') }}</button>
+              <button class="btn btn-xs btn-danger" onclick="openReject({{ a.id }}, '{{ a.app_no }}')">{{ tr('btn_reject') }}</button>
+            {% endif %}
+          </td>
+        </tr>
+        {% else %}<tr><td colspan="9" class="muted center">{{ tr('当前没有待处理的申请单') }}</td></tr>{% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-title">{{ tr('出入库流水') }}<span class="muted">{{ tr('（按时间/类型筛选，可导出 Excel）') }}</span>
+    <a class="btn btn-xs" style="float:right" href="{{ url_for('inout_export', date_from=date_from, date_to=date_to, f_type=f_type) }}">📥 {{ tr('导出 Excel') }}</a>
+  </div>
+  <form class="inline-form" method="get" action="{{ url_for('inout_page') }}" style="margin-bottom:10px">
+    <label class="muted small">{{ tr('起始日期') }}<input class="f-input" type="text" name="date_from" value="{{ date_from }}" placeholder="{{ tr('如 2026/10/08') }}" onchange="this.value=this.value.replace(/[\/]/g,'-')"></label>
+    <label class="muted small">{{ tr('截止日期') }}<input class="f-input" type="text" name="date_to" value="{{ date_to }}" placeholder="{{ tr('如 2026/10/08') }}" onchange="this.value=this.value.replace(/[\/]/g,'-')"></label>
+    <select class="f-input" name="f_type">
+      <option value="">{{ tr('type_all') }}</option>
+      <option value="in" {{ 'selected' if f_type=='in' }}>{{ tr('type_in') }}</option>
+      <option value="out" {{ 'selected' if f_type=='out' }}>{{ tr('type_out') }}</option>
+      <option value="transfer" {{ 'selected' if f_type=='transfer' }}>{{ tr('type_transfer') }}</option>
+    </select>
+    <button class="btn" type="submit">{{ tr('btn_search') }}</button>
+    <a class="btn" href="{{ url_for('inout_page') }}">{{ tr('btn_reset') }}</a>
+    <span class="muted small">{{ tr('共') }} {{ tx_total }} {{ tr('条') }}</span>
+  </form>
+  <div class="table-wrap">
+    <table class="table">
+      <thead><tr><th>{{ tr('th_no') }}</th><th>{{ tr('th_time') }}</th><th>{{ tr('th_part') }}</th><th>{{ tr('th_type') }}</th><th>{{ tr('th_location') }}</th><th>{{ tr('th_quantity') }}</th>{% if can('price') %}<th>{{ tr('th_price') }}</th><th>{{ tr('th_amount') }}</th>{% endif %}<th>{{ tr('th_operator') }}</th><th>{{ tr('备注') }}</th></tr></thead>
+      <tbody>
+        {% for t in txs %}
+        <tr>
+          <td class="mono">{{ t.tx_no }}</td>
+          <td class="mono">{{ t.created_at }}</td>
+          <td>{{ t.part_code }}<br><span class="muted">{{ t.name }}</span></td>
+          <td>
+            {% if t.tx_type=='in' %}<span class="badge badge-ok">{{ tr('type_in') }}</span>
+            {% elif t.tx_type=='transfer' %}<span class="badge badge-info">{{ tr('type_adjust') }}</span>
+            {% else %}<span class="badge badge-danger">{{ tr('type_out') }}</span>{% endif %}
+          </td>
+          <td>{{ t.location or '-' }}</td>
+          <td class="num">{{ t.quantity }}</td>
+          {% if can('price') %}<td class="num">{{ '%.2f'|format(t.unit_price) }}</td>
+          <td class="num">{{ '%.2f'|format(t.amount) }}</td>{% endif %}
+          <td>{{ t.op_name or '-' }}</td>
+          <td class="muted">{{ t.remark or '-' }}</td>
+        </tr>
+        {% else %}<tr><td colspan="{{ 10 if can('price') else 8 }}" class="muted center">{{ tr('暂无流水') }}</td></tr>{% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div class="pager" style="margin-top:10px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+    <select class="f-input" style="max-width:130px" onchange="location.href='{{ url_for('inout_page') }}?date_from={{ date_from }}&date_to={{ date_to }}&f_type={{ f_type }}&per_page='+this.value">
+      {% for v in [5,10,20,100] %}<option value="{{ v }}" {{ 'selected' if tx_per_page==(v|string) }}>{{ tr('每页') }} {{ v }} {{ tr('条') }}</option>{% endfor %}
+      <option value="all" {{ 'selected' if tx_per_page=='all' }}>{{ tr('全部') }}</option>
+    </select>
+    <span class="muted small">{{ tr('共 {0} 条 · 第 {1}/{2} 页').format(tx_total, tx_page, tx_pages) }}</span>
+    {% if tx_page > 1 %}<a class="btn btn-xs" href="{{ url_for('inout_page', page=tx_page-1, date_from=date_from, date_to=date_to, f_type=f_type, per_page=tx_per_page) }}">{{ tr('上一页') }}</a>{% endif %}
+    {% if tx_page < tx_pages %}<a class="btn btn-xs" href="{{ url_for('inout_page', page=tx_page+1, date_from=date_from, date_to=date_to, f_type=f_type, per_page=tx_per_page) }}">{{ tr('下一页') }}</a>{% endif %}
+  </div>
+</div>
+
+<!-- 执行（出入库）弹窗 -->
+<div class="modal-mask" id="exec-modal" style="display:none" onclick="if(event.target===this)closeModal('exec-modal')">
+  <div class="modal">
+    <div class="modal-head"><span>{{ tr('执行申请单') }}</span><button class="modal-x" onclick="closeModal('exec-modal')">✕</button></div>
+    <form class="modal-body" method="post" id="exec-form" onsubmit="return beforeExecSubmit()">
+      <p id="exec-info"></p>
+      <p id="exec-loc-info" class="muted small"></p>
+      <label class="f-label">{{ tr('执行库位 *（出库=扣减该库位库存；入库=加入该库位库存）') }}<select class="f-input" name="location_id" id="exec-loc" required onchange="execLocChange()"><option value="">{{ tr('加载中…') }}</option></select>
+      </label>
+      <div id="exec-loc-new-wrap" class="loc-cascade" style="display:none;margin-top:6px">
+        <div class="muted small" style="width:100%">{{ tr('新库位（仓库号-货架号-货位号必填级联；格位号可空，选空=整货位；已被其他备件存放的位置不可重复入库）') }}</div>
+        <select class="f-input" id="ex-new-wh" onchange="exNewWh()"><option value="">{{ tr('仓库号…') }}</option></select>
+        <select class="f-input" id="ex-new-rack" onchange="exNewRack()"><option value="">{{ tr('货架号…') }}</option></select>
+        <select class="f-input" id="ex-new-shelf" onchange="exNewShelf()"><option value="">{{ tr('货位号…') }}</option></select>
+        <select class="f-input" id="ex-new-bin" onchange="exNewPick()"><option value="">{{ tr('格位号…') }}</option></select>
+        <input type="hidden" name="new_location_id" id="ex-new-loc-id">
+        <span class="muted small" id="ex-new-msg"></span>
+      </div>
+      <label class="f-label">{{ tr('备注') }}textarea class="f-input" name="note" rows="2"></textarea></label>
+      <div class="modal-foot"><button class="btn btn-primary" type="submit">{{ tr('确认执行') }}</button>
+      <button class="btn" type="button" onclick="closeModal('exec-modal')">{{ tr('btn_cancel') }}</button></div>
+    </form>
+  </div>
+</div>
+
+<!-- 执行调库弹窗 -->
+<div class="modal-mask" id="tf-exec-modal" style="display:none" onclick="if(event.target===this)closeModal('tf-exec-modal')">
+  <div class="modal">
+    <div class="modal-head"><span>{{ tr('执行调库') }}</span><button class="modal-x" onclick="closeModal('tf-exec-modal')">✕</button></div>
+    <form class="modal-body" method="post" id="tf-exec-form">
+      <p id="tf-exec-info"></p>
+      <p class="muted small" style="margin:6px 0">{{ tr('确认执行后，申请单指定的') }}<b>{{ tr('源库位') }}</b>{{ tr('的库存将整体移动至目标位置（数量不变）；若目标位置已被其他备件存放库存，系统将拒绝执行。') }}</p>
+      <label class="f-label">{{ tr('备注') }}textarea class="f-input" name="note" rows="2"></textarea></label>
+      <div class="modal-foot"><button class="btn btn-primary" type="submit">{{ tr('确认执行') }}</button>
+      <button class="btn" type="button" onclick="closeModal('tf-exec-modal')">{{ tr('btn_cancel') }}</button></div>
+    </form>
+  </div>
+</div>
+
+<!-- 驳回弹窗 -->
+<div class="modal-mask" id="reject-modal" style="display:none" onclick="if(event.target===this)closeModal('reject-modal')">
+  <div class="modal">
+    <div class="modal-head"><span>{{ tr('驳回申请单') }}</span><button class="modal-x" onclick="closeModal('reject-modal')">✕</button></div>
+    <form class="modal-body" method="post" id="reject-form">
+      <label class="f-label">{{ tr('驳回原因') }}<textarea class="f-input" name="note" rows="2" placeholder="{{ tr('可空') }}"></textarea></label>
+      <div class="modal-foot"><button class="btn btn-danger" type="submit">{{ tr('确认驳回') }}</button>
+      <button class="btn" type="button" onclick="closeModal('reject-modal')">{{ tr('btn_cancel') }}</button></div>
+    </form>
+  </div>
+</div>
+
+<!-- 批准撤销弹窗 -->
+<div class="modal-mask" id="cancel-app-modal" style="display:none" onclick="if(event.target===this)closeModal('cancel-app-modal')">
+  <div class="modal">
+    <div class="modal-head"><span>{{ tr('批准撤销（回滚库存/位置）') }}</span><button class="modal-x" onclick="closeModal('cancel-app-modal')">✕</button></div>
+    <div class="modal-body">
+      <p class="muted small" style="margin-bottom:8px">{{ tr('批准后自动回滚：入库申请→扣回原库位；出库申请→退回原库位；调库申请→位置调回源位置。') }}</p>
+      <form method="post" id="cancel-app-form">
+        <label class="f-label">{{ tr('备注（可空）') }}<textarea class="f-input" name="note" rows="2"></textarea></label>
+        <div class="modal-foot"><button class="btn btn-primary" type="submit">{{ tr('确认批准') }}</button>
+        <button class="btn" type="button" onclick="closeModal('cancel-app-modal')">{{ tr('btn_cancel') }}</button></div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- 驳回撤销弹窗 -->
+<div class="modal-mask" id="cancel-rej-modal" style="display:none" onclick="if(event.target===this)closeModal('cancel-rej-modal')">
+  <div class="modal">
+    <div class="modal-head"><span>{{ tr('驳回撤销请求') }}</span><button class="modal-x" onclick="closeModal('cancel-rej-modal')">✕</button></div>
+    <form class="modal-body" method="post" id="cancel-rej-form">
+      <label class="f-label">{{ tr('驳回原因（可空）') }}<textarea class="f-input" name="note" rows="2"></textarea></label>
+      <div class="modal-foot"><button class="btn btn-danger" type="submit">{{ tr('确认驳回') }}</button>
+      <button class="btn" type="button" onclick="closeModal('cancel-rej-modal')">{{ tr('btn_cancel') }}</button></div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+const LOCS = {{ locations | tojson }};
+const IO_EQUIP = {{ equipment | tojson }};
+let IO_PART = null, EXEC_TYPE = null;
+function ioApproverShow(){
+  const wrap = document.getElementById('io-approver-wrap');
+  if(!wrap) return;
+  const type = document.getElementById('io-type').value;
+  wrap.style.display = (type==='out' && IO_PART && IO_PART.is_valuable) ? '' : 'none';
+}
+function ioLineChange(){
+  const line = document.getElementById('io-line').value;
+  const dev = document.getElementById('io-device');
+  let html = '<option value="">{{ tr('设备（可空）') }}</option>';
+  IO_EQUIP.forEach(function(e){ if(!line || e.line_name===line){ html += '<option value="'+esc(e.name)+'">'+esc(e.name)+'</option>'; } });
+  dev.innerHTML = html;
+}
+function closeModal(id){ document.getElementById(id).style.display='none'; }
+
+/* ---------- {{ tr('直接出入库') }} ---------- */
+function onIoPartPick(p){
+  IO_PART = p;
+  const qty = document.getElementById('io-qty');
+  if(p.qty_decimal){ qty.step='0.001'; qty.min='0.01'; }
+  else { qty.step='1'; qty.min='1'; }
+  ioApproverShow();
+  ioLoadLocs();
+}
+function ioTypeChange(){
+  document.getElementById('io-loc').value='';
+  document.getElementById('io-loc-new-wrap').style.display='none';
+  document.getElementById('io-new-loc-id').value='';
+  const type = document.getElementById('io-type').value;
+  document.getElementById('io-out-fields').style.display = type==='out' ? '' : 'none';
+  const r = document.getElementById('io-reason');
+  if(r) r.placeholder = type==='out' ? '{{ tr('使用原因') }}{{ tr('（') }}{{ tr('出库必填信息') }}{{ tr('）') }}' : TR('备注{{ tr('（') }}可空{{ tr('）') }}');
+  ioApproverShow();
+  if(IO_PART) ioLoadLocs();
+}
+function ioLoadLocs(){
+  const sel = document.getElementById('io-loc');
+  const type = document.getElementById('io-type').value;
+  if(!IO_PART){ sel.innerHTML='<option value="">{{ tr('先选择备件…') }}</option>'; return; }
+  sel.innerHTML='<option value="">{{ tr('加载中') }}…</option>';
+  fetch('/api/parts/'+IO_PART.id).then(r=>r.json()).then(d=>{
+    const locs = d.locations || [];
+    let html='';
+    if(type==='out'){
+      // 出库只能从「有放置位置且有库存」的库位扣减（待定行不可出库）
+      const has = locs.filter(l=>Number(l.quantity)>0 && Number(l.location_id));
+      if(!has.length){
+        sel.innerHTML='<option value="">{{ tr('该备件当前没有可出库的库位') }}{{ tr('（') }}{{ tr('无库存或全部处于待定') }}{{ tr('）') }}</option>';
+        sel.disabled=true;
+      } else {
+        has.forEach(l=>{ html += '<option value="'+esc(l.location_id||'')+'">'+esc(l.location)+'{{ tr('（') }}{{ tr('库存') }} '+fmt(l.quantity)+'{{ tr('）') }}</option>'; });
+        sel.disabled=false;
+        if(has.length===1) sel.value = String(has[0].location_id||'');
+      }
+    } else {
+      const seen = {};
+      locs.forEach(l=>{ if(!seen[l.location]) seen[l.location]={id:l.location_id, q:Number(l.quantity)||0}; });
+      Object.keys(seen).forEach(loc=>{ html += '<option value="'+esc(seen[loc].id||'')+'">'+esc(loc)+'{{ tr('（') }}{{ tr('现有') }} '+fmt(seen[loc].q)+'{{ tr('）') }}</option>'; });
+      if(!Object.keys(seen).length) html += '<option value="">{{ tr('尚无任何库存库位') }}</option>';
+      html += '<option value="__NEW__">＋ {{ tr('新库位') }}…</option>';
+      sel.disabled=false;
+    }
+    sel.innerHTML = '<option value="">{{ tr('请选择库位') }}</option>' + html;
+    ioLocChange();
+  }).catch(()=>{ sel.innerHTML='<option value="">{{ tr('库位加载失败') }}{{ tr('，') }}{{ tr('请重试') }}</option>'; });
+}
+function ioLocChange(){
+  const wrap = document.getElementById('io-loc-new-wrap');
+  const show = document.getElementById('io-loc').value==='__NEW__';
+  wrap.style.display = show ? 'inline-flex' : 'none';
+  if(show) ioNewReset();
+}
+function beforeIoSubmit(){
+  const sel = document.getElementById('io-loc');
+  if(sel.value==='__NEW__'){
+    const lid = document.getElementById('io-new-loc-id').value;
+    if(!lid){ alert(TR('请选择新库位{{ tr('（') }}仓库-货架-货位-格位{{ tr('）') }}')); return false; }
+    sel.value = lid;
+    document.getElementById('io-new-loc-id').name = 'new_location_id';
+    sel.removeAttribute('required');
+  }
+  if(sel.value==='' && document.getElementById('io-type').value==='out'){
+    alert(TR('请选择出库库位')); return false;
+  }
+  return true;
+}
+/* 新库位级联（直接出入库） */
+function ioNewReset(){
+  const whs = [...new Set(LOCS.map(l=>l.warehouse))];
+  fillSel(document.getElementById('io-new-wh'), whs, TR('仓库号…'));
+  fillSel(document.getElementById('io-new-rack'), [], TR('货架号…'));
+  fillSel(document.getElementById('io-new-shelf'), [], TR('货位号…'));
+  fillSel(document.getElementById('io-new-bin'), [], TR('格位号…'));
+  document.getElementById('io-new-loc-id').value='';
+}
+function ioNewWh(){ cascadeNew('io', document.getElementById('io-new-wh').value, '', ''); }
+function ioNewRack(){ cascadeNew('io', document.getElementById('io-new-wh').value, document.getElementById('io-new-rack').value, ''); }
+function ioNewShelf(){ cascadeNew('io', document.getElementById('io-new-wh').value, document.getElementById('io-new-rack').value, document.getElementById('io-new-shelf').value); }
+function ioNewPick(){ pickNew('io', document.getElementById('io-new-bin')); }
+
+/* ---------- {{ tr('执行申请单') }}（{{ tr('出入库') }}） ---------- */
+function openExecFrom(btn){
+  openExec(Number(btn.dataset.aid), btn.dataset.no, Number(btn.dataset.pid), btn.dataset.code,
+    Number(btn.dataset.qty), btn.dataset.type, btn.dataset.loc,
+    btn.dataset.line, btn.dataset.device, btn.dataset.reason);
+}
+function openExec(aid, no, pid, code, qty, type, locText, line, device, reason){
+  EXEC_TYPE = type;
+  document.getElementById('exec-form').action='/applications/'+aid+'/execute';
+  document.getElementById('exec-info').innerHTML='<b>'+no+'</b> '+code+' × '+qty+'{{ tr('（') }}'+(type==='in'?TR('入库'):TR('出库'))+'{{ tr('）') }}'
+    + (line ? '<br>{{ tr('使用线别') }}{{ tr('：') }}'+esc(line)+' {{ tr('｜') }} {{ tr('设备') }}{{ tr('：') }}'+esc(device||'—') : '')
+    + (reason ? '<br>{{ tr('领出原因') }}{{ tr('：') }}'+esc(reason) : '');
+  document.getElementById('exec-loc-info').innerHTML = locText
+    ? '{{ tr('备件库位分布') }}{{ tr('：') }}<span class="mono">'+esc(locText)+'</span>'+TR('{{ tr('（') }}出库请从有库存的库位扣减{{ tr('）') }}')
+    : TR('该备件无任何库存库位');
+  const sel = document.getElementById('exec-loc');
+  sel.innerHTML = '<option value="">{{ tr('加载中') }}…</option>';
+  document.getElementById('exec-loc-new-wrap').style.display='none';
+  document.getElementById('ex-new-loc-id').value='';
+  document.getElementById('exec-modal').style.display='flex';
+  fetch('/api/parts/'+pid).then(r=>r.json()).then(d=>{
+    const locs = d.locations || [];
+    let html = '';
+    if(type==='out'){
+      // 出库只能从「有放置位置且有库存」的库位扣减（待定行不可出库）
+      const has = locs.filter(l=>Number(l.quantity)>0 && Number(l.location_id));
+      if(!has.length){
+        html = '<option value="">{{ tr('该备件当前没有可出库的库位') }}{{ tr('（') }}{{ tr('无库存或全部处于待定') }}{{ tr('）') }}</option>';
+        sel.disabled = true;
+      } else {
+        has.forEach(l=>{ html += '<option value="'+esc(l.location_id||'')+'">'+esc(l.location)+'{{ tr('（') }}{{ tr('库存') }} '+fmt(l.quantity)+'{{ tr('）') }}</option>'; });
+        sel.disabled = false;
+        if(has.length===1) sel.value = String(has[0].location_id||'');
+      }
+    } else {
+      const seen = {};
+      locs.forEach(l=>{ if(!seen[l.location]) seen[l.location]={id:l.location_id, q:Number(l.quantity)||0}; });
+      Object.keys(seen).forEach(loc=>{ html += '<option value="'+esc(seen[loc].id||'')+'">'+esc(loc)+'{{ tr('（') }}{{ tr('现有') }} '+fmt(seen[loc].q)+'{{ tr('）') }}</option>'; });
+      if(!Object.keys(seen).length) html += '<option value="">{{ tr('尚无任何库存库位') }}</option>';
+      html += '<option value="__NEW__">＋ {{ tr('新库位') }}…</option>';
+      sel.disabled = false;
+    }
+    sel.innerHTML = '<option value="">{{ tr('请选择库位') }}</option>' + html;
+    execLocChange();
+  }).catch(()=>{
+    sel.innerHTML = '<option value="">{{ tr('库位加载失败') }}{{ tr('，') }}{{ tr('请重试') }}</option>';
+    sel.disabled = false;
+  });
+}
+function execLocChange(){
+  const show = document.getElementById('exec-loc').value==='__NEW__';
+  document.getElementById('exec-loc-new-wrap').style.display = show ? 'flex' : 'none';
+  if(show) exNewReset();
+}
+function beforeExecSubmit(){
+  const sel = document.getElementById('exec-loc');
+  if(sel.value==='__NEW__'){
+    const lid = document.getElementById('ex-new-loc-id').value;
+    if(!lid){ alert(TR('请选择新库位{{ tr('（') }}仓库-货架-货位-格位{{ tr('）') }}')); return false; }
+    sel.value = lid;
+    document.getElementById('ex-new-loc-id').name = 'new_location_id';
+    sel.removeAttribute('required');
+  }
+  if(!sel.value && EXEC_TYPE==='out'){
+    alert(TR('出库请选择有库存的库位')); return false;
+  }
+  return true;
+}
+/* 新库位级联（执行弹窗） */
+function exNewReset(){
+  const whs = [...new Set(LOCS.map(l=>l.warehouse))];
+  fillSel(document.getElementById('ex-new-wh'), whs, TR('仓库号…'));
+  fillSel(document.getElementById('ex-new-rack'), [], TR('货架号…'));
+  fillSel(document.getElementById('ex-new-shelf'), [], TR('货位号…'));
+  fillSel(document.getElementById('ex-new-bin'), [], TR('格位号…'));
+  document.getElementById('ex-new-loc-id').value='';
+  document.getElementById('ex-new-msg').textContent='';
+}
+function exNewWh(){ cascadeNew('ex', document.getElementById('ex-new-wh').value, '', ''); }
+function exNewRack(){ cascadeNew('ex', document.getElementById('ex-new-wh').value, document.getElementById('ex-new-rack').value, ''); }
+function exNewShelf(){ cascadeNew('ex', document.getElementById('ex-new-wh').value, document.getElementById('ex-new-rack').value, document.getElementById('ex-new-shelf').value); }
+function exNewPick(){ pickNew('ex', document.getElementById('ex-new-bin')); }
+
+/* 新库位级联公共逻辑 */
+function fillSel(sel, opts, placeholder){
+  sel.innerHTML = '<option value="">'+placeholder+'</option>' + opts.map(o=>'<option value="'+esc(o)+'">'+esc(o)+'</option>').join('');
+}
+function cascadeNew(prefix, wh, rack, shelf){
+  const selWh = document.getElementById(prefix+'-new-wh');
+  const selRack = document.getElementById(prefix+'-new-rack');
+  const selShelf = document.getElementById(prefix+'-new-shelf');
+  const selBin = document.getElementById(prefix+'-new-bin');
+  const locId = document.getElementById(prefix+'-new-loc-id');
+  locId.value='';
+  if(prefix==='io') document.getElementById('io-new-loc-id').name='new_location_id';
+  if(prefix==='ex') document.getElementById('ex-new-loc-id').name='new_location_id';
+  if(!wh){ fillSel(selRack, [], TR('货架号…')); fillSel(selShelf, [], TR('货位号…')); fillSel(selBin, [], TR('格位号…')); return; }
+  if(!rack){
+    const racks=[...new Set(LOCS.filter(l=>l.warehouse===wh).map(l=>l.rack))].sort();
+    fillSel(selRack, racks, TR('货架号…')); fillSel(selShelf, [], TR('货位号…')); fillSel(selBin, [], TR('格位号…'));
+    return;
+  }
+  if(!shelf){
+    const shelves=[...new Set(LOCS.filter(l=>l.warehouse===wh&&l.rack===rack).map(l=>l.shelf))].sort();
+    fillSel(selShelf, shelves, TR('货位号…')); fillSel(selBin, [], TR('格位号…'));
+    return;
+  }
+  const list = LOCS.filter(l=>l.warehouse===wh&&l.rack===rack&&l.shelf===shelf);
+  const seen = {};
+  list.forEach(l=>{ const k=l.bin||'__WHOLE__'; if(!seen[k]) seen[k]=[]; seen[k].push(l); });
+  const keys = Object.keys(seen).sort((a,b)=>(a==='__WHOLE__'?-1:0)-(b==='__WHOLE__'?-1:0)||a.localeCompare(b));
+  const opts = keys.map(k=>{ const ls=seen[k]; const occ=ls.find(x=>x.part_id);
+    const label=(k==='__WHOLE__'?TR('整货位'):k)+(occ?TR('{{ tr('（') }}占用:')+occ.part_code+TR('{{ tr('）') }}'):TR('{{ tr('（') }}空位{{ tr('）') }}'));
+    return {v:String(ls[0].id), label:label, occ:!!occ}; });
+  opts.sort((a,b)=>(a.occ?1:0)-(b.occ?1:0));
+  selBin.innerHTML = '<option value="">{{ tr('格位号…') }}</option>' + opts.map(o=>'<option value="'+esc(o.v)+'">'+esc(o.label)+'</option>').join('');
+}
+function pickNew(prefix, bin){
+  const locId = document.getElementById(prefix+'-new-loc-id');
+  const msg = document.getElementById(prefix==='ex'?'ex-new-msg':'io-new-msg');
+  if(!bin.value){ locId.value=''; return; }
+  const loc = LOCS.find(l=>String(l.id)===bin.value);
+  if(loc.part_id){ locId.value=''; if(msg) msg.textContent=TR('该位置已被备件占用{{ tr('，') }}')+TR('不能入库'); return; }
+  locId.value = String(loc.id);
+  if(msg) msg.textContent='';
+}
+
+function openTransferExec(aid, no, code, fromTxt, toTxt){
+  document.getElementById('tf-exec-form').action='/applications/'+aid+'/execute';
+  document.getElementById('tf-exec-info').innerHTML='<b>'+no+'</b> '+code+'{{ tr('：') }}<span class="mono">'+esc(fromTxt)+'</span> {{ tr('→') }} <span class="mono">'+esc(toTxt)+'</span>';
+  document.getElementById('tf-exec-modal').style.display='flex';
+}
+function openReject(aid, no){
+  document.getElementById('reject-form').action='/applications/'+aid+'/execute';
+  const f=document.createElement('input'); f.type='hidden'; f.name='action'; f.value='reject';
+  document.getElementById('reject-form').appendChild(f);
+  document.getElementById('reject-modal').style.display='flex';
+}
+function openCancelApprove(aid, no){
+  document.getElementById('cancel-app-form').action='/applications/'+aid+'/cancel-approve';
+  document.getElementById('cancel-app-modal').style.display='flex';
+}
+function openCancelReject(aid, no){
+  document.getElementById('cancel-rej-form').action='/applications/'+aid+'/cancel-reject';
+  document.getElementById('cancel-rej-modal').style.display='flex';
+}
+function esc(s){ const d=document.createElement('div'); d.textContent=s==null?'':String(s); return d.innerHTML; }
+function fmt(v){ return Number(v||0).toLocaleString('zh-CN'); }
+</script>
+{% endblock %}

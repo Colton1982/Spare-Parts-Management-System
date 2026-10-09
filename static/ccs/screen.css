@@ -1,0 +1,73 @@
+/* ============ 大屏展示页样式（颜色由风格配置的 CSS 变量驱动） ============ */
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overflow:hidden}
+body{font-family:"Microsoft YaHei","PingFang SC",sans-serif;
+     color:var(--text,#e5e7eb);
+     background:linear-gradient(135deg,var(--sbg,#0b1120),var(--sbg2,#111c33));
+     display:flex;flex-direction:column;font-size:15px}
+
+/* ---------- 顶部 ---------- */
+.scr-head{display:flex;justify-content:space-between;align-items:center;
+  padding:14px 28px;background:linear-gradient(90deg,var(--head,#111827),var(--head2,#1e3a8a));color:#fff;flex:0 0 auto}
+.scr-title{font-size:26px;font-weight:800;letter-spacing:1px}
+.scr-brand{display:flex;align-items:center;gap:12px;min-width:0}
+.scr-brand-text{min-width:0}
+.scr-brand-sub{font-size:13px;color:var(--sub,#94a3b8);opacity:.9;letter-spacing:.5px;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.scr-logo{border-radius:8px;object-fit:contain;background:rgba(255,255,255,.12);padding:4px;flex-shrink:0}
+.scr-logo-icon{font-size:34px;flex-shrink:0}
+.scr-status{display:flex;align-items:center;gap:22px;font-size:15px}
+.scr-clock{font-size:24px;font-weight:700;font-family:Consolas,monospace}
+.scr-period{background:rgba(255,255,255,.15);padding:4px 14px;border-radius:20px;font-size:15px}
+.scr-count{font-size:13px;opacity:.85}
+.scr-upd{font-size:13px;opacity:.85}
+
+/* ---------- 主体：卡片绝对定位（12 列 x 10 行网格，位置由布局配置驱动） ---------- */
+.scr-body{position:relative;flex:1;padding:16px 20px;min-height:0}
+.scr-card-abs{position:absolute;display:flex;flex-direction:column;min-height:0;
+  background:var(--card,#111a2e);border:1px solid var(--cardb,#1e2a3d);border-radius:14px;
+  padding:12px 16px;overflow:hidden}
+
+/* 统计卡片 */
+.sc-label{font-size:15px;color:var(--label,#7d8aa0);flex:0 0 auto}
+.sc-num{font-size:40px;font-weight:800;color:var(--num,#38bdf8);margin:4px 0 2px;font-variant-numeric:tabular-nums;flex:1;display:flex;align-items:center}
+.sc-sub{font-size:13px;color:var(--sub,#94a3b8);flex:0 0 auto}
+
+/* 待处理申请 */
+.pend-wrap{flex:1;display:flex;gap:14px;min-height:0}
+.pend-item{flex:1;background:var(--card,#0d1526);border:1px solid var(--cardb,#1e2a3d);border-radius:12px;
+  padding:12px 20px;font-size:17px;color:var(--text,#cbd5e1);display:flex;align-items:center;gap:10px}
+.pend-item b{font-size:28px;color:var(--accent,#fbbf24)}
+.pend-val b{color:var(--num,#38bdf8)}
+
+/* 图表面板 */
+.scr-panel-title{font-size:15px;font-weight:700;color:var(--title,#e2e8f0);margin-bottom:6px;flex:0 0 auto}
+.scr-card-abs canvas{flex:1;min-height:0;width:100%}
+
+/* 预警 */
+.scr-alerts{flex:1;display:flex;gap:12px;min-height:0}
+.scr-alert-col{flex:1;display:flex;flex-direction:column;min-height:0}
+.scr-alert-head{font-size:14px;font-weight:700;margin-bottom:6px}
+.scr-alert-head.low{color:var(--alert_low,#f87171)}
+.scr-alert-head.high{color:var(--alert_high,#fb923c)}
+.scr-alert-list{flex:1;overflow:hidden;display:flex;flex-direction:column;gap:6px}
+.scr-alert-item{display:flex;align-items:center;gap:8px;background:var(--card,#0d1526);border:1px solid var(--cardb,#1e2a3d);
+  border-radius:8px;padding:6px 10px;font-size:13px}
+.scr-alert-item span{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.scr-alert-item b{color:var(--accent,#fbbf24);font-size:15px}
+.scr-alert-item em{font-style:normal;color:var(--label,#7d8aa0);font-size:12px}
+.scr-stale-hint{font-size:12px;font-weight:400;color:var(--sub,#94a3b8);margin-left:8px}
+.scr-none{color:#4b5563;text-align:center;padding:20px 0}
+
+/* 流水表 */
+.scr-table{width:100%;border-collapse:collapse;font-size:13px;flex:1;min-height:0}
+.scr-table th{color:var(--label,#7d8aa0);text-align:left;padding:5px 8px;font-weight:600;font-size:12.5px;border-bottom:1px solid var(--cardb,#1e2a3d)}
+.scr-table td{padding:5px 8px;border-bottom:1px solid var(--cardb,#1e2a3d);vertical-align:middle}
+.scr-table tbody{display:block;max-height:100%;overflow:hidden}
+.scr-table thead, .scr-table tbody tr{display:table;width:100%;table-layout:fixed}
+.scr-sub{font-size:11.5px;color:var(--sub,#94a3b8)}
+.tx-badge{display:inline-block;padding:1px 8px;border-radius:12px;font-size:12px;font-weight:700}
+.tx-in{background:rgba(34,197,94,.15);color:#4ade80}
+.theme-light .tx-in{color:#15803d}
+.tx-out{background:rgba(249,115,22,.15);color:#fb923c}
+.theme-light .tx-out{color:#c2410c}
+.num{text-align:right;font-variant-numeric:tabular-nums}

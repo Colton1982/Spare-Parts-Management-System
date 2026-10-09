@@ -1,0 +1,418 @@
+{% extends "base.html" %}
+{% block title %}{{ tr('page_screen_config') }} - Spare Parts Management System<style>
+.style-card{cursor:pointer;border:2px solid #e2e8f0;border-radius:10px;padding:8px;text-align:center;background:#fff;transition:border-color .15s}
+.style-card:hover{border-color:#93c5fd}
+.style-card.on{border-color:#2563eb;box-shadow:0 0 0 1px #2563eb inset}
+.style-card label{display:block;cursor:pointer}
+.style-swatch{display:block;height:46px;border-radius:8px;position:relative;margin-bottom:6px}
+.style-swatch i{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:22px;height:22px;border-radius:50%;box-shadow:0 0 0 3px rgba(255,255,255,.35)}
+.style-swatch.custom{background:#f1f5f9;display:flex;align-items:center;justify-content:center;font-size:22px}
+.style-name{font-size:12.5px;color:#334155;font-weight:600}
+</style>
+<script>
+function pickStyle(key){
+  document.querySelectorAll('.style-card input[name=style]').forEach(function(r){ r.checked = r.value === key; });
+  document.querySelectorAll('.style-card').forEach(function(c){ c.classList.toggle('on', c.getAttribute('data-style') === key); });
+  var box = document.getElementById('custom-colors');
+  if(box) box.style.display = key === 'custom' ? 'block' : 'none';
+}
+</script>
+{% endblock %}
+{% block page_title %}{{ tr('大屏展示配置') }}<style>
+.style-card{cursor:pointer;border:2px solid #e2e8f0;border-radius:10px;padding:8px;text-align:center;background:#fff;transition:border-color .15s}
+.style-card:hover{border-color:#93c5fd}
+.style-card.on{border-color:#2563eb;box-shadow:0 0 0 1px #2563eb inset}
+.style-card label{display:block;cursor:pointer}
+.style-swatch{display:block;height:46px;border-radius:8px;position:relative;margin-bottom:6px}
+.style-swatch i{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:22px;height:22px;border-radius:50%;box-shadow:0 0 0 3px rgba(255,255,255,.35)}
+.style-swatch.custom{background:#f1f5f9;display:flex;align-items:center;justify-content:center;font-size:22px}
+.style-name{font-size:12.5px;color:#334155;font-weight:600}
+</style>
+<script>
+function pickStyle(key){
+  document.querySelectorAll('.style-card input[name=style]').forEach(function(r){ r.checked = r.value === key; });
+  document.querySelectorAll('.style-card').forEach(function(c){ c.classList.toggle('on', c.getAttribute('data-style') === key); });
+  var box = document.getElementById('custom-colors');
+  if(box) box.style.display = key === 'custom' ? 'block' : 'none';
+}
+</script>
+{% endblock %}
+{% block content %}
+<div class="card-grid">
+<div class="card card-wide" id="card-screen">
+  <div class="card-title">{{ tr('大屏展示配置') }}{{ tr('（保存后大屏立即生效）') }}</div>
+  <form method="post" class="ajax-form">
+    <div class="sub-h" style="margin:4px 0 8px">{{ tr('① 显示内容') }}</div>
+    <div class="f-label">{{ tr('显示模块') }}{{ tr('（勾选后大屏只显示这些内容）') }}</div>
+    <div class="grid2">
+      {% for key, label in SCREEN_MODULES.items() %}
+      <label class="f-check">
+        <input type="checkbox" name="mod_{{ key }}" value="1" {{ 'checked' if key in cfg.modules }}>
+        {{ label }}
+      </label>
+      {% endfor %}
+    </div>
+    <label class="f-check" style="margin-top:10px">
+      <input type="checkbox" name="show_price" value="1" {{ 'checked' if cfg.show_price }}>
+      {{ tr('大屏显示金额') }}{{ tr('（') }}{{ tr('单价') }}/{{ tr('金额为敏感内容') }}{{ tr('，') }}{{ tr('默认不展示') }}{{ tr('；') }}{{ tr('不勾选则金额类卡片自动隐藏') }}{{ tr('）') }}
+    </label>
+    <div class="muted small" style="margin:6px 0 0;line-height:1.6">{{ tr('提示') }}{{ tr('隐藏的模块') }}{{ tr('（') }}{{ tr('如金额卡') }}{{ tr('）') }}{{ tr('会自动留出空位，相邻卡片会自动变宽') }}/{{ tr('变高把空位填满') }}{{ tr('卡片位置保持不变') }}{{ tr('；') }}{{ tr('勾选项越少') }}{{ tr('剩余卡片越大越清晰') }}{{ tr('。') }}</div>
+
+    <div class="sub-h" style="margin:16px 0 8px">② {{ tr('大屏风格') }}{{ tr('（') }}{{ tr('预设一键套用') }}{{ tr('，') }}{{ tr('或选') }}{{ tr('「') }}{{ tr('自定义') }}{{ tr('」') }}{{ tr('手动配色') }}{{ tr('）') }}</div>
+    <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:8px">
+      {% for key in ['tech-blue','midnight-gold','tech-cyan','nebula-purple','green-data','light-clean'] %}
+      {% set st = SCREEN_STYLES[key] %}
+      <div class="style-card {{ 'on' if cfg.style==key }}" data-style="{{ key }}" onclick="pickStyle('{{ key }}')">
+        <label>
+          <input type="radio" name="style" value="{{ key }}" {{ 'checked' if cfg.style==key }} style="display:none">
+          <span class="style-swatch" style="background:linear-gradient(135deg,{{ st.vars.sbg }},{{ st.vars.sbg2 }})"><i style="background:{{ st.vars.num }}"></i></span>
+          <span class="style-name">{{ st.name }}</span>
+        </label>
+      </div>
+      {% endfor %}
+    </div>
+    <div class="style-card manual {{ 'on' if cfg.style=='custom' }}" data-style="custom" onclick="pickStyle('custom')" style="display:inline-block;margin-top:8px">
+      <label>
+        <input type="radio" name="style" value="custom" {{ 'checked' if cfg.style=='custom' }} style="display:none">
+        <span class="style-swatch custom">🎨</span>
+        <span class="style-name">{{ tr('自定义') }}{{ tr('（') }}{{ tr('手动配色') }}{{ tr('）') }}</span>
+      </label>
+    </div>
+    <div id="custom-colors" style="{{ 'display:block' if cfg.style=='custom' else 'display:none' }}">
+      <div class="grid3" style="margin-top:10px">
+        {% for k, lab in [('sbg','页面背景'),('sbg2','背景渐变终点'),('head','顶栏起点色'),('head2','顶栏终点色'),('card','卡片底色'),('cardb','卡片边框'),('label','标签文字色'),('num','数值主色'),('title','面板标题色'),('accent','强调色')] %}
+        <label class="f-label">{{ tr(lab) }}{{ tr('（') }}{{ tr('留空') }}={{ tr('跟随科技蓝默认') }}{{ tr('）') }}
+          <span style="display:flex;gap:6px">
+            <input type="hidden" name="sc_{{ k }}" value="{{ cfg.style_custom.get(k,'') }}">
+            <input class="f-input color-pick" type="color" value="{{ cfg.style_custom.get(k) or SCREEN_STYLES['tech-blue'].vars[k] }}" oninput="this.previousElementSibling.value=this.value">
+            <button type="button" class="btn" style="padding:4px 10px;font-size:12px" onclick="this.previousElementSibling.previousElementSibling.value='';this.previousElementSibling.value='{{ SCREEN_STYLES['tech-blue'].vars[k] }}'">{{ tr('跟随') }}</button>
+          </span>
+        </label>
+        {% endfor %}
+      </div>
+      <div class="muted small" style="margin:6px 0">{{ tr('留空项自动使用') }}{{ tr('「') }}{{ tr('科技蓝') }}{{ tr('」') }}{{ tr('默认值') }}{{ tr('；') }}{{ tr('自定义风格下页面深浅以你填的') }}{{ tr('「') }}{{ tr('页面背景') }}{{ tr('」') }}{{ tr('为准') }}{{ tr('（') }}{{ tr('浅色背景时图表自动切浅色配色') }}{{ tr('）') }}{{ tr('。') }}</div>
+    </div>
+
+    <div class="sub-h" style="margin:16px 0 8px">③ {{ tr('大屏标题与') }} LOGO</div>
+    <div class="grid2">
+      <label class="f-label">{{ tr('大屏标题') }}{{ tr('（') }}{{ tr('留空') }}={{ tr('跟随系统设置的侧栏品牌') }}{{ tr('）') }}
+        <input class="f-input" name="sb_title" value="{{ cfg.sb_title }}" maxlength="30" placeholder="{{ tr('留空跟随系统设置') }}">
+      </label>
+      <label class="f-label">{{ tr('副标题') }}{{ tr('（') }}{{ tr('留空') }}={{ tr('跟随系统设置') }}{{ tr('）') }}
+        <input class="f-input" name="sb_subtitle" value="{{ cfg.sb_subtitle }}" maxlength="50" placeholder="{{ tr('留空跟随系统设置') }}">
+      </label>
+      <label class="f-label">LOGO {{ tr('高度') }}(px{{ tr('，') }}0={{ tr('跟随系统品牌') }})
+        <input class="f-input" type="number" name="sb_logo_height" value="{{ cfg.sb_logo_height }}" min="0" max="160" step="2">
+      </label>
+      <label class="f-label">{{ tr('标题字号') }}(px{{ tr('，') }}0={{ tr('跟随系统品牌') }})
+        <input class="f-input" type="number" name="sb_title_size" value="{{ cfg.sb_title_size }}" min="0" max="80" step="1">
+      </label>
+      <label class="f-label">{{ tr('副标题字号') }}(px{{ tr('，') }}0={{ tr('跟随系统品牌') }})
+        <input class="f-input" type="number" name="sb_subtitle_size" value="{{ cfg.sb_subtitle_size }}" min="0" max="40" step="1">
+      </label>
+      <label class="f-label">{{ tr('标题字色') }}{{ tr('（') }}{{ tr('点击') }}{{ tr('「') }}{{ tr('跟随') }}{{ tr('」') }}{{ tr('恢复系统品牌色') }}{{ tr('）') }}
+        <span style="display:flex;gap:6px">
+          <input type="hidden" name="sb_title_color" value="{{ cfg.sb_title_color }}">
+          <input class="f-input color-pick" type="color" value="{{ cfg.sb_title_color or '#ffffff' }}" oninput="this.previousElementSibling.value=this.value">
+          <button type="button" class="btn" style="padding:4px 10px;font-size:12px" onclick="this.previousElementSibling.previousElementSibling.value='';this.previousElementSibling.value='#ffffff'">{{ tr('跟随') }}</button>
+        </span>
+      </label>
+      <label class="f-label">{{ tr('副标题字色') }}{{ tr('（') }}{{ tr('点击') }}{{ tr('「') }}{{ tr('跟随') }}{{ tr('」') }}{{ tr('恢复系统品牌色') }}{{ tr('）') }}
+        <span style="display:flex;gap:6px">
+          <input type="hidden" name="sb_subtitle_color" value="{{ cfg.sb_subtitle_color }}">
+          <input class="f-input color-pick" type="color" value="{{ cfg.sb_subtitle_color or '#93c5fd' }}" oninput="this.previousElementSibling.value=this.value">
+          <button type="button" class="btn" style="padding:4px 10px;font-size:12px" onclick="this.previousElementSibling.previousElementSibling.value='';this.previousElementSibling.value='#93c5fd'">{{ tr('跟随') }}</button>
+        </span>
+      </label>
+      <label class="f-label">{{ tr('字体') }}{{ tr('（') }}{{ tr('留空') }}={{ tr('跟随系统品牌') }}{{ tr('）') }}
+        <select class="f-input" name="sb_font_family">
+          <option value="" {{ 'selected' if not cfg.sb_font_family }}>{{ tr('跟随系统设置') }}</option>
+          <option value="'Microsoft YaHei','PingFang SC',sans-serif" {{ 'selected' if cfg.sb_font_family and 'Microsoft YaHei' in cfg.sb_font_family }}>{{ tr('微软雅黑') }}</option>
+          <option value="'SimSun',serif" {{ 'selected' if cfg.sb_font_family and 'SimSun' in cfg.sb_font_family }}>{{ tr('宋体') }}</option>
+          <option value="'KaiTi',serif" {{ 'selected' if cfg.sb_font_family and 'KaiTi' in cfg.sb_font_family }}>{{ tr('楷体') }}</option>
+          <option value="'SimHei',sans-serif" {{ 'selected' if cfg.sb_font_family and 'SimHei' in cfg.sb_font_family }}>{{ tr('黑体') }}</option>
+        </select>
+      </label>
+    </div>
+    <label class="f-check"><input type="checkbox" name="sb_show_logo" value="1" {{ 'checked' if cfg.sb_show_logo }}> {{ tr('显示') }} LOGO{{ tr('（') }}{{ tr('使用系统设置中上传的品牌') }} LOGO{{ tr('，') }}{{ tr('取消勾选则不显示') }}{{ tr('）') }}</label>
+    <div class="muted small" style="margin:6px 0">
+      {{ tr('说明：') }}{{ tr('大屏顶部标题') }}/LOGO {{ tr('默认跟随') }}{{ tr('「') }}{{ tr('系统设置') }} {{ tr('→') }} {{ tr('界面主题与外观') }} {{ tr('→') }} {{ tr('侧栏品牌') }}{{ tr('」') }}{{ tr('；在此单独填写则大屏用独立值') }}{{ tr('，') }}{{ tr('字号') }}/{{ tr('高度填') }} 0{{ tr('颜色与字体留空表示继续跟随系统') }}{{ tr('。') }}
+    </div>
+
+    <div class="sub-h" style="margin:16px 0 8px">{{ tr('④ 统计与刷新') }}</div>
+    <div class="grid3">
+      <label class="f-label">{{ tr('统计周期') }}<select class="f-input" name="period">
+          <option value="day" {{ 'selected' if cfg.period=='day' }}>{{ tr('按日（今日）') }}</option>
+          <option value="week" {{ 'selected' if cfg.period=='week' }}>{{ tr('按周（本周）') }}</option>
+          <option value="month" {{ 'selected' if cfg.period=='month' }}>{{ tr('按月（本月）') }}</option>
+        </select>
+      </label>
+      <label class="f-label">{{ tr('刷新间隔（秒）') }}<input class="f-input" type="number" name="refresh" min="5" max="3600" step="5" value="{{ cfg.refresh }}">
+      </label>
+      <label class="f-label">{{ tr('主题') }}<select class="f-input" name="theme">
+          <option value="dark" {{ 'selected' if cfg.theme=='dark' }}>{{ tr('深色（推荐大屏）') }}</option>
+          <option value="light" {{ 'selected' if cfg.theme=='light' }}>{{ tr('浅色') }}</option>
+        </select>
+      </label>
+    </div>
+
+    <div class="sub-h" style="margin:16px 0 8px">⑤ {{ tr('趋势图回溯长度') }}</div>
+    <div class="grid2">
+      <label class="f-label">{{ tr('按日') }}{{ tr('（') }}{{ tr('近 N 天') }}{{ tr('）') }}
+        <select class="f-input" name="trend_day">
+          {% for n in [7, 14, 30] %}
+          <option value="{{ n }}" {{ 'selected' if cfg.trend.day==n }}>{{ tr('近 {0} 天').format(n) }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label class="f-label">{{ tr('按周') }}{{ tr('（') }}{{ tr('近 N 周') }}{{ tr('）') }}
+        <select class="f-input" name="trend_week">
+          {% for n in [4, 8, 12] %}
+          <option value="{{ n }}" {{ 'selected' if cfg.trend.week==n }}>{{ tr('近 {0} 周').format(n) }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label class="f-label">{{ tr('按月') }}{{ tr('（') }}{{ tr('近 N 月') }}{{ tr('）') }}
+        <select class="f-input" name="trend_month">
+          {% for n in [3, 6, 12] %}
+          <option value="{{ n }}" {{ 'selected' if cfg.trend.month==n }}>{{ tr('近 {0} 月').format(n) }}</option>
+          {% endfor %}
+        </select>
+      </label>
+    </div>
+
+    <div class="sub-h" style="margin:16px 0 8px">⑥ {{ tr('各模块显示条数') }}</div>
+    <div class="grid2">
+      <label class="f-label">{{ tr('最新出入库流水（条）') }}
+        <select class="f-input" name="lim_recent_tx">
+          {% for n in [5, 10, 20, 30] %}
+          <option value="{{ n }}" {{ 'selected' if cfg.limits.recent_tx==n }}>{{ n }} {{ tr('条') }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label class="f-label">{{ tr('库存预警') }}{{ tr('（') }}{{ tr('每类条数') }}{{ tr('）') }}
+        <select class="f-input" name="lim_alerts">
+          {% for n in [5, 10, 20] %}
+          <option value="{{ n }}" {{ 'selected' if cfg.limits.alerts==n }}>{{ n }} {{ tr('条') }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label class="f-label">{{ tr('呆滞物料（条）') }}<select class="f-input" name="lim_stale">
+          {% for n in [5, 10, 20] %}
+          <option value="{{ n }}" {{ 'selected' if cfg.limits.stale==n }}>{{ n }} {{ tr('条') }}</option>
+          {% endfor %}
+        </select>
+      </label>
+    </div>
+
+    <div class="sub-h" style="margin:16px 0 8px">{{ tr('⑦ 呆滞判定') }}</div>
+    <label class="f-label">{{ tr('呆滞天数') }}{{ tr('（') }}{{ tr('大屏专用') }}{{ tr('；') }}{{ tr('选') }}"{{ tr('跟随系统设置') }}"{{ tr('则使用系统设置中的') }} 90 {{ tr('天默认值') }}{{ tr('）') }}
+      <select class="f-input" name="stale_days">
+        <option value="0" {{ 'selected' if cfg.stale_days==0 }}>{{ tr('跟随系统设置') }}</option>
+        {% for n in [30, 60, 90, 120, 180, 365] %}
+        <option value="{{ n }}" {{ 'selected' if cfg.stale_days==n }}>{{ n }} {{ tr('天') }}</option>
+        {% endfor %}
+      </select>
+    </label>
+
+    <div class="sub-h" style="margin:16px 0 8px">⑧ {{ tr('卡片布局') }}{{ tr('（') }}{{ tr('可拖拽调位置') }}{{ tr('、') }}{{ tr('拉伸大小') }}{{ tr('；') }}{{ tr('10 种预设一键套用，前 5 种含金额、后 5 种不含金额，也支持手动排版') }}{{ tr('）') }}</div>
+    <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px">
+      {% for key, lay in SCREEN_LAYOUTS.items() %}
+      <div class="ly-preset {{ 'on' if cfg.layout.mode==key }}" data-p="{{ key }}" onclick="lyApplyPreset('{{ key }}')">
+        <div class="ly-preset-name">{{ lay.name }}</div>
+        <div class="ly-preset-mini" data-mini="{{ key }}"></div>
+      </div>
+      {% endfor %}
+    </div>
+    <label class="f-check" style="margin-top:10px"><input type="checkbox" id="ly-custom" {{ 'checked' if cfg.layout.mode=='custom' }} onchange="lyToggleCustom()"> {{ tr('手动排版') }}{{ tr('（拖动卡片调整位置，拖动右下角手柄调整大小；目标位置被占用时卡片保持原位不移动）') }}</label>
+    <div id="ly-editor" style="{{ 'display:block' if cfg.layout.mode=='custom' else 'display:none' }}">
+      <div id="ly-canvas" style="margin-top:8px"></div>
+      <div class="muted small" style="margin:6px 0">{{ tr('提示') }}{{ tr('拖拽卡片标题区移动；拖动卡片右下角') }} ◢ {{ tr('手柄调整大小') }}{{ tr('；') }}{{ tr('已勾选') }}{{ tr('「') }}{{ tr('手动排版') }}{{ tr('」') }}{{ tr('时，再次点击某个预设会覆盖当前手动排版') }}{{ tr('。') }}</div>
+    </div>
+    <input type="hidden" name="layout_mode" id="ly-mode" value="{{ cfg.layout.mode }}">
+    <input type="hidden" name="layout_cards" id="ly-cards" value='{{ cfg.layout.cards | tojson }}'>
+
+    <div class="muted small" style="margin:10px 0">
+      {{ tr('大屏页面地址') }}{{ tr('（') }}{{ tr('无需登录') }}{{ tr('，') }}{{ tr('可直接全屏') }}{{ tr('）') }}{{ tr('：') }}<br>
+      <span class="mono">http://127.0.0.1:{{ APP_PORT }}/screen</span>
+    </div>
+    <button class="btn btn-primary" type="submit">{{ tr('保存配置') }}</button>
+    <a class="btn" href="{{ url_for('screen_page') }}" target="_blank">{{ tr('预览大屏') }}</a>
+  </form>
+</div>
+</div>
+<style>
+.ly-preset{cursor:pointer;border:2px solid #e2e8f0;border-radius:10px;padding:8px;text-align:center;background:#fff;transition:border-color .15s}
+.ly-preset:hover{border-color:#93c5fd}
+.ly-preset.on{border-color:#2563eb;box-shadow:0 0 0 1px #2563eb inset}
+.ly-preset-name{font-size:13px;color:#334155;font-weight:600}
+.ly-preset-mini{height:54px;margin-top:6px;position:relative;background:#f1f5f9;border-radius:6px;overflow:hidden}
+.ly-mini-card{position:absolute;background:#bfdbfe;border:1px solid #60a5fa;border-radius:2px}
+#ly-canvas{position:relative;height:420px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;
+  background-image:linear-gradient(#e2e8f0 1px,transparent 1px),linear-gradient(90deg,#e2e8f0 1px,transparent 1px);
+  background-size:100% calc(100%/10),calc(100%/12) 100%}
+.ly-card{position:absolute;background:#eff6ff;border:1px solid #93c5fd;border-radius:8px;cursor:move;user-select:none;box-shadow:0 1px 3px rgba(0,0,0,.08)}
+.ly-card-head{padding:6px 8px;font-size:12px;color:#1e40af;font-weight:600;pointer-events:none}
+.ly-resize{position:absolute;right:2px;bottom:2px;width:15px;height:15px;cursor:nwse-resize;
+  background:linear-gradient(135deg,transparent 49%,#2563eb 50%,#2563eb 58%,transparent 59%)}
+</style>
+<script>
+const LY_PRESETS = {{ SCREEN_LAYOUTS | tojson }};
+const LY_CARDS_META = {{ SCREEN_CARDS | tojson }};
+const LY_COLS = 12, LY_ROWS = 10;
+let LY = null;
+let lyDrag = null;
+
+function lyDrawMinis(){
+  document.querySelectorAll('.ly-preset-mini').forEach(function(m){
+    const key = m.getAttribute('data-mini');
+    const p = LY_PRESETS[key];
+    let html = '';
+    for(const k in p.cards){
+      const v = p.cards[k];
+      html += '<div class="ly-mini-card" style="left:'+(v[0]*100/12)+'%;top:'+(v[1]*100/10)+'%;width:'+(v[2]*100/12)+'%;height:'+(v[3]*100/10)+'%"></div>';
+    }
+    m.innerHTML = html;
+  });
+}
+
+function lyCardHtml(k, c){
+  const meta = LY_CARDS_META[k] || {label:k};
+  return '<div class="ly-card" data-k="'+k+'" style="left:'+(c.x*100/12)+'%;top:'+(c.y*100/10)+'%;width:'+(c.w*100/12)+'%;height:'+(c.h*100/10)+'%">'
+    + '<div class="ly-card-head">'+meta.label+'</div><i class="ly-resize"></i></div>';
+}
+
+function lyDraw(){
+  const canvas = document.getElementById('ly-canvas');
+  if(!canvas) return;
+  let html = '';
+  for(const k in LY.cards){
+    html += lyCardHtml(k, LY.cards[k]);
+  }
+  canvas.innerHTML = html;
+}
+
+function lySync(){
+  document.getElementById('ly-mode').value = LY.mode;
+  document.getElementById('ly-cards').value = JSON.stringify(LY.cards);
+  document.querySelectorAll('.ly-preset').forEach(function(el){
+    el.classList.toggle('on', LY.mode === el.getAttribute('data-p'));
+  });
+  document.getElementById('ly-custom').checked = (LY.mode === 'custom');
+  document.getElementById('ly-editor').style.display = (LY.mode === 'custom') ? 'block' : 'none';
+}
+
+function lyApplyPreset(name){
+  if(!LY_PRESETS[name]) return;
+  LY.mode = name;
+  LY.cards = {};
+  const p = LY_PRESETS[name];
+  for(const k in p.cards){
+    const v = p.cards[k];
+    LY.cards[k] = {x:v[0], y:v[1], w:v[2], h:v[3]};
+  }
+  lyDraw(); lySync();
+}
+
+function lyToggleCustom(){
+  if(document.getElementById('ly-custom').checked){
+    LY.mode = 'custom';
+  } else {
+    const on = document.querySelector('.ly-preset.on');
+    if(on) lyApplyPreset(on.getAttribute('data-p'));
+    else lyApplyPreset('classic');
+    return;
+  }
+  lyDraw(); lySync();
+}
+
+function lyHit(x,y,w,h,skip){
+  for(const k in LY.cards){
+    if(k===skip) continue;
+    const c = LY.cards[k];
+    if(x < c.x+c.w && x+w > c.x && y < c.y+c.h && y+h > c.y) return k;
+  }
+  return null;
+}
+
+function lyInit(){
+  const cardsRaw = {{ cfg.layout.cards | tojson }};
+  const mode = '{{ cfg.layout.mode }}';
+  LY = {mode: mode, cards: {}};
+  for(const k in cardsRaw){
+    const c = cardsRaw[k];
+    LY.cards[k] = {x:c.x, y:c.y, w:c.w, h:c.h};
+  }
+  lyDrawMinis();
+  lyDraw();
+  lySync();
+}
+
+(function(){
+  const canvas = document.getElementById('ly-canvas');
+  if(!canvas) return;
+  canvas.addEventListener('mousedown', function(e){
+    const t = e.target;
+    const cardEl = t.closest('.ly-card');
+    if(!cardEl) return;
+    const key = cardEl.getAttribute('data-k');
+    const c = LY.cards[key];
+    if(!c) return;
+    const rect = canvas.getBoundingClientRect();
+    lyDrag = {key:key, cv:canvas, ox:c.x, oy:c.y, ow:c.w, oh:c.h, el:cardEl,
+              mode: t.classList.contains('ly-resize') ? 'resize' : 'move'};
+    e.preventDefault();
+  });
+  document.addEventListener('mousemove', function(e){
+    if(!lyDrag) return;
+    const d = lyDrag;
+    // 每次用实时画布位置，避免页面滚动后坐标错位
+    const r = d.cv.getBoundingClientRect();
+    const ux = (e.clientX - r.left) / r.width * LY_COLS;
+    const uy = (e.clientY - r.top) / r.height * LY_ROWS;
+    const c = LY.cards[d.key];
+    if(d.mode === 'move'){
+      // 以卡片中心跟随鼠标
+      let nx = Math.round(ux - d.ow/2), ny = Math.round(uy - d.oh/2);
+      nx = Math.max(0, Math.min(nx, LY_COLS - d.ow));
+      ny = Math.max(0, Math.min(ny, LY_ROWS - d.oh));
+      if(nx === c.x && ny === c.y) return;
+      // {{ tr('目标位置被占用') }}：{{ tr('不移动') }}、{{ tr('不做交换') }}，避免拖动过程中错乱跳变
+      if(lyHit(nx, ny, d.ow, d.oh, d.key)) return;
+      c.x = nx; c.y = ny;
+      d.el.style.left = (nx*100/12)+'%'; d.el.style.top = (ny*100/10)+'%';
+    } else {
+      let nw = Math.round(ux - d.ox), nh = Math.round(uy - d.oy);
+      nw = Math.max(1, Math.min(nw, LY_COLS - d.ox));
+      nh = Math.max(1, Math.min(nh, LY_ROWS - d.oy));
+      if(nw === c.w && nh === c.h) return;
+      if(lyHit(d.ox, d.oy, nw, nh, d.key)) return;
+      c.w = nw; c.h = nh;
+      d.el.style.width = (nw*100/12)+'%'; d.el.style.height = (nh*100/10)+'%';
+    }
+  });
+  document.addEventListener('mouseup', function(){
+    // 松手后一次性重绘并同步表单，拖动过程中不做整卡重绘
+    if(lyDrag){ lyDrag = null; lyDraw(); lySync(); }
+  });
+})();
+lyInit();
+</script>
+.style-card{cursor:pointer;border:2px solid #e2e8f0;border-radius:10px;padding:8px;text-align:center;background:#fff;transition:border-color .15s}
+.style-card:hover{border-color:#93c5fd}
+.style-card.on{border-color:#2563eb;box-shadow:0 0 0 1px #2563eb inset}
+.style-card label{display:block;cursor:pointer}
+.style-swatch{display:block;height:46px;border-radius:8px;position:relative;margin-bottom:6px}
+.style-swatch i{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:22px;height:22px;border-radius:50%;box-shadow:0 0 0 3px rgba(255,255,255,.35)}
+.style-swatch.custom{background:#f1f5f9;display:flex;align-items:center;justify-content:center;font-size:22px}
+.style-name{font-size:12.5px;color:#334155;font-weight:600}
+</style>
+<script>
+function pickStyle(key){
+  document.querySelectorAll('.style-card input[name=style]').forEach(function(r){ r.checked = r.value === key; });
+  document.querySelectorAll('.style-card').forEach(function(c){ c.classList.toggle('on', c.getAttribute('data-style') === key); });
+  var box = document.getElementById('custom-colors');
+  if(box) box.style.display = key === 'custom' ? 'block' : 'none';
+}
+</script>
+{% endblock %}

@@ -1,0 +1,182 @@
+{% extends "base.html" %}
+{% block title %}{{ tr('page_restore') }} - Spare Parts Management System{% endblock %}
+{% block page_title %}>{{ tr('page_restore') }}{% endblock %}
+{% block content %}
+<style>
+.restore-note{background:#fffbeb;border:1px solid #fde68a;border-radius:10px;padding:10px 14px;margin-bottom:14px}
+.badge{display:inline-block;padding:2px 8px;border-radius:999px;font-size:12px}
+.badge-pending{background:#fef3c7;color:#92400e}
+.badge-approved{background:#dcfce7;color:#166534}
+.badge-rejected{background:#fee2e2;color:#991b1b}
+.badge-completed{background:#e0f2fe;color:#075985}
+.badge-canceled{background:#f1f5f9;color:#475569}
+</style>
+
+<div class="restore-note">
+  <b>{{ tr('恢复规则：') }}</b>{{ tr('恢复申请只能由') }}<b>{{ tr('仓库管理人员') }} / {{ tr('最高用户') }}</b>{{ tr('发起；由申请人的') }}<b>{{ tr('部门经理') }}</b>或<b>{{ tr('最高用户') }}</b>{{ tr('审批') }}
+  {{ tr('（') }}{{ tr('最高用户发起时可选由自己审批或选择经理以上人员审批') }}{{ tr('）') }}{{ tr('；') }}{{ tr('审批通过后由') }}<b>{{ tr('仓库管理人员') }} / {{ tr('最高用户') }}</b>{{ tr('执行恢复') }}{{ tr('。') }}
+  {{ tr('执行时系统会先自动备份当前数据库') }}{{ tr('（') }}{{ tr('备份到备份目录') }}{{ tr('，') }}{{ tr('文件名含') }} prerestore{{ tr('）') }}{{ tr('，') }}{{ tr('再用所选备份覆盖，随后自动重启生效') }}{{ tr('。') }}
+</div>
+
+<div class="card-grid">
+<div class="card card-wide" id="card-backup">
+  <div class="card-title">{{ tr('数据库自动备份') }}</div>
+  <form method="post" action="/settings" class="ajax-form">
+    <label class="f-check"><input type="checkbox" name="backup_enabled" value="1" {{ 'checked' if backup.enabled }}> {{ tr('启用自动备份') }}{{ tr('（软件运行期间自动检查，到期自动备份）') }}</label>
+    <div class="grid2">
+      <label class="f-label">{{ tr('备份间隔') }}<select class="f-input" name="backup_interval_hours">
+          {% for v, l in [(1, tr('每 1 小时')), (6, tr('每 6 小时')), (12, tr('每 12 小时')), (24, tr('每天')), (72, tr('每 3 天')), (168, tr('每周')), (720, tr('每月'))] %}
+          <option value="{{ v }}" {{ 'selected' if backup.interval_hours==v }}>{{ tr(l) }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label class="f-label">{{ tr('保留份数') }}{{ tr('（') }}{{ tr('手动录入') }}{{ tr('自动删除更早的') }}{{ tr('；') }}1-99{{ tr('）') }}
+        <input class="f-input" type="number" name="backup_keep" min="1" max="99" value="{{ backup.keep }}" style="max-width:160px">
+      </label>
+    </div>
+    <label class="f-label">{{ tr('备份目录') }}{{ tr('（') }}{{ tr('可手动录入') }}{{ tr('，') }}{{ tr('也可点') }}{{ tr('「') }}{{ tr('选择目录') }}{{ tr('」') }}{{ tr('浏览') }}{{ tr('；') }}{{ tr('留空') }}={{ tr('数据库同级') }} backups {{ tr('文件夹') }}{{ tr('）') }}
+      <div class="dir-row" style="display:flex;gap:8px;align-items:center">
+        <input class="f-input" name="backup_dir" id="backup-dir-input" value="{{ backup.dir }}" style="flex:1">
+        <button type="button" class="btn" onclick="openDirModal()">{{ tr('选择目录') }}</button>
+      </div>
+    </label>
+    <div class="muted small" style="margin:8px 0">
+      {{ tr('说明') }}{{ tr('备份使用在线备份方式，软件运行期间执行备份不会中断使用') }}{{ tr('、') }}{{ tr('也不锁库') }}{{ tr('；') }}
+      {{ tr('建议备份到与数据库不同的位置') }}{{ tr('（') }}{{ tr('如另一台机器') }}/{{ tr('另一个共享目录') }}{{ tr('）') }}{{ tr('。') }}{{ tr('任何一台开着软件的电脑到期都会自动执行备份') }}{{ tr('。') }}
+    </div>
+    <button class="btn btn-primary" type="submit" name="backup_save" value="1">{{ tr('保存备份设置') }}</button>
+    <button class="btn" type="submit" name="backup_now" value="1">{{ tr('立即备份一次') }}</button>
+    <div class="sub-h" style="margin:14px 0 6px">{{ tr('备份文件列表') }}{{ tr('（') }}{{ tr('可点击') }}{{ tr('「') }}{{ tr('申请恢复') }}{{ tr('」') }}{{ tr('发起恢复') }}{{ tr('，') }}{{ tr('也可删除') }}{{ tr('）') }}</div>
+    <div id="backups-box">{% include "_backups.html" %}</div>
+  </form>
+</div>
+
+
+<div class="card card-wide">
+  <div class="card-title">{{ tr('发起恢复申请') }}</div>
+  <form method="post" action="{{ url_for('restore_apply') }}" class="grid2">
+    <label class="f-label">{{ tr('选择备份文件') }}<select class="f-input" name="backup_name" required>
+        {% for b in backups %}
+        <option value="{{ b.name }}" {{ 'selected' if pre_backup==b.name }}>{{ b.name }}{{ tr('（') }}{{ "%.1f"|format(b.size/1024/1024) }}MB / {{ b.mtime }}{{ tr('）') }}</option>
+        {% else %}
+        <option value="">{{ tr('暂无可用备份') }}{{ tr('（请先在系统设置中创建备份）') }}</option>
+        {% endfor %}
+      </select>
+      <input type="hidden" name="backup_dir" value="{{ backups[0].dir if backups else '' }}">
+      <div class="muted small">{{ tr('备份目录：') }}<span class="mono">{{ backups[0].dir if backups else tr('无备份') }}</span></div>
+    </label>
+    {% if cur_user.role == 'admin' %}
+    <label class="f-label">{{ tr('审批人') }}{{ tr('（最高用户可自审或选经理以上人员）') }}
+      <select class="f-input" name="approver_id" required>
+        {% for x in approvers %}
+        <option value="{{ x.id }}">{{ x.display_name }}{{ tr('（') }}{{ tr(ROLE_NAMES[x.role]) }}{% if x.department %} / {{ x.department }}{% endif %}{{ tr('）') }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    {% else %}
+    <div class="f-label">{{ tr('审批人') }}<div class="muted" style="padding:8px 0">{{ tr('自动指派') }}{{ tr('你的部门经理；无部门经理时由最高用户审批') }}{{ tr('。') }}</div>
+    </div>
+    {% endif %}
+    <div style="grid-column:1/-1">
+      <button class="btn btn-primary" type="submit">{{ tr('提交恢复申请') }}</button>
+      <a class="btn" href="{{ url_for('system_settings') }}">{{ tr('去系统设置创建备份') }} {{ tr('→') }}</a>
+    </div>
+  </form>
+</div>
+
+{% if todo %}
+<div class="card card-wide">
+  <div class="card-title">{{ tr('待我审批') }}</div>
+  <table class="table">
+    <thead><tr><th>{{ tr('申请单号') }}</th><th>{{ tr('备份文件') }}</th><th>{{ tr('申请时间') }}</th><th>{{ tr('th_applicant') }}</th><th>{{ tr('审批意见') }}</th><th>{{ tr('th_ops') }}</th></tr></thead>
+    <tbody>
+    {% for r in todo %}
+    <tr>
+      <td class="mono">{{ r.app_no }}</td>
+      <td class="mono small">{{ r.backup_name }}</td>
+      <td class="mono">{{ r.created_at }}</td>
+      <td>{{ r.applicant }}</td>
+      <td style="min-width:180px">
+        <form method="post" action="{{ url_for('restore_approve', rid=r.id) }}" style="display:inline">
+          <input class="f-input" style="padding:4px 8px;max-width:170px" name="note" placeholder="{{ tr('审批意见（可选）') }}">
+          <button class="btn btn-success" type="submit">{{ tr('通过') }}</button>
+        </form>
+        <form method="post" action="{{ url_for('restore_reject', rid=r.id) }}" style="display:inline">
+          <button class="btn btn-danger" type="submit">{{ tr('btn_reject') }}</button>
+        </form>
+      </td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
+<div class="card card-wide">
+  <div class="card-title">{{ tr('我的恢复申请') }}</div>
+  <table class="table">
+    <thead><tr><th>{{ tr('申请单号') }}</th><th>{{ tr('备份文件') }}</th><th>{{ tr('申请时间') }}</th><th>{{ tr('th_approver') }}</th><th>{{ tr('th_status') }}</th><th>{{ tr('审批时间') }}</th><th>{{ tr('th_ops') }}</th></tr></thead>
+    <tbody>
+    {% for r in my_apps %}
+    <tr>
+      <td class="mono">{{ r.app_no }}</td>
+      <td class="mono small">{{ r.backup_name }}</td>
+      <td class="mono">{{ r.created_at }}</td>
+      <td>{{ tr(r.approver or '待审批') }} }}</td>
+      <td>
+        {% if r.status=='pending' %}<span class="badge badge-pending">{{ tr('待审批') }}</span>
+        {% elif r.status=='approved' %}<span class="badge badge-approved">{{ tr('已通过') }}{{ tr('（') }}{{ tr('可执行恢复') }}{{ tr('）') }}</span>
+        {% elif r.status=='rejected' %}<span class="badge badge-rejected">{{ tr('status_rejected') }}</span>
+        {% elif r.status=='completed' %}<span class="badge badge-completed">{{ tr('已恢复') }}</span>
+        {% else %}<span class="badge badge-canceled">{{ tr('status_canceled') }}</span>{% endif %}
+      </td>
+      <td class="mono">{{ r.processed_at or '—' }}</td>
+      <td>
+        {% if r.status=='pending' %}
+        <form method="post" action="{{ url_for('restore_cancel', rid=r.id) }}" style="display:inline">
+          <button class="btn btn-xs" type="submit">{{ tr('撤销申请') }}</button>
+        </form>
+        {% elif r.status=='approved' and cur_user.role in ('admin','warehouse') %}
+        <form method="post" action="{{ url_for('restore_execute', rid=r.id) }}" style="display:inline" onsubmit="return confirm('{{ tr('将用该备份覆盖当前数据库（执行前会自动备份当前库），确认恢复') }}？');">
+          <button class="btn btn-xs btn-primary" type="submit">{{ tr('执行恢复') }}</button>
+        </form>
+        {% endif %}
+      </td>
+    </tr>
+    {% else %}
+    <tr><td colspan="7" class="muted center">{{ tr('暂无恢复申请') }}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<div class="card card-wide">
+  <div class="card-title">{{ tr('全部恢复记录') }}{{ tr('（') }}{{ tr('最近') }} 100 {{ tr('条') }}{{ tr('）') }}</div>
+  <table class="table">
+    <thead><tr><th>{{ tr('申请单号') }}</th><th>{{ tr('备份文件') }}</th><th>{{ tr('th_applicant') }}</th><th>{{ tr('th_approver') }}</th><th>{{ tr('th_status') }}</th><th>{{ tr('申请时间') }}</th><th>{{ tr('审批/恢复时间') }}</th><th>{{ tr('意见') }}</th></tr></thead>
+    <tbody>
+    {% for r in all_apps %}
+    <tr>
+      <td class="mono">{{ r.app_no }}</td>
+      <td class="mono small">{{ r.backup_name }}</td>
+      <td>{{ r.applicant }}</td>
+      <td>{{ r.approver or '—' }}</td>
+      <td>
+        {% if r.status=='pending' %}<span class="badge badge-pending">{{ tr('待审批') }}</span>
+        {% elif r.status=='approved' %}<span class="badge badge-approved">{{ tr('已通过') }}</span>
+        {% elif r.status=='rejected' %}<span class="badge badge-rejected">{{ tr('status_rejected') }}</span>
+        {% elif r.status=='completed' %}<span class="badge badge-completed">{{ tr('已恢复') }}</span>
+        {% else %}<span class="badge badge-canceled">{{ tr('status_canceled') }}</span>{% endif %}
+      </td>
+      <td class="mono">{{ r.created_at }}</td>
+      <td class="mono">{{ r.processed_at or '—' }}</td>
+      <td class="small">{{ r.approval_note or '' }}</td>
+    </tr>
+    {% else %}
+    <tr><td colspan="8" class="muted center">{{ tr('暂无记录') }}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+</div>
+{% endblock %}

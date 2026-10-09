@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block title %}{{ tr('page_departments') }} - Spare Parts Management System{% endblock %}
+{% block page_title %}>{{ tr('page_departments') }}{% endblock %}
+{% block content %}
+
+<div class="card">
+  <div class="card-title">{{ tr('新增部门') }}</div>
+  <form class="inline-form" method="post" action="{{ url_for('department_add') }}">
+    <input class="f-input" name="name" placeholder="{{ tr('部门名称，如：生产部') }}" required>
+    <input class="f-input" name="remark" placeholder="{{ tr('备注(可空)') }}">
+    <button class="btn btn-primary" type="submit">{{ tr('添加部门') }}</button>
+  </form>
+  <div class="muted small">{{ tr('部门维护后，新增/编辑用户时可从下拉框选择；部门下有用户时不允许删除（需先调整用户部门）。') }}</div>
+</div>
+
+<div class="card">
+  <div class="card-title">{{ tr('部门列表') }}{{ tr('（') }}{{ tr('共') }} {{ deps|length }} {{ tr('个') }}{{ tr('）') }}</div>
+  <div class="table-wrap">
+    <table class="table">
+      <thead><tr><th>ID</th><th>{{ tr('部门名称') }}</th><th>{{ tr('备注') }}</th><th>{{ tr('人数') }}</th><th>{{ tr('创建时间') }}</th><th>{{ tr('th_ops') }}</th></tr></thead>
+      <tbody>
+        {% for d in deps %}
+        <tr>
+          <td>{{ d.id }}</td>
+          <td><b>{{ d.name }}</b></td>
+          <td class="muted">{{ d.remark or '-' }}</td>
+          <td>{{ d.user_count }}</td>
+          <td class="mono">{{ d.created_at }}</td>
+          <td class="ops">
+            <button class="btn btn-xs" onclick="openDepEdit({{ d.id }}, '{{ d.name }}', '{{ d.remark or '' }}')">{{ tr('btn_edit') }}</button>
+            <button class="btn btn-xs btn-danger" onclick="delDep({{ d.id }}, '{{ d.name }}')">{{ tr('btn_delete') }}</button>
+          </td>
+        </tr>
+        {% else %}<tr><td colspan="6" class="muted center">{{ tr('暂无部门') }}</td></tr>{% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="modal-mask" id="dep-edit-modal" style="display:none" onclick="if(event.target===this)closeModal('dep-edit-modal')">
+  <div class="modal">
+    <div class="modal-head"><span>{{ tr('编辑部门') }}</span><button class="modal-x" onclick="closeModal('dep-edit-modal')">✕</button></div>
+    <form class="modal-body" method="post" id="dep-edit-form">
+      <label class="f-label">{{ tr('部门名称') }}<input class="f-input" name="name" id="d-name" required></label>
+      <label class="f-label">{{ tr('备注') }}<textarea class="f-input" name="remark" id="d-remark" rows="2"></textarea></label>
+      <div class="muted small">{{ tr('改名后，该部门下所有用户的部门会自动同步为新名称。') }}</div>
+      <div class="modal-foot"><button class="btn btn-primary" type="submit">{{ tr('btn_save') }}</button>
+      <button class="btn" type="button" onclick="closeModal('dep-edit-modal')">{{ tr('btn_cancel') }}</button></div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+function closeModal(id){ document.getElementById(id).style.display='none'; }
+function openDepEdit(did, name, remark){
+  document.getElementById('dep-edit-form').action='/departments/'+did+'/edit';
+  document.getElementById('d-name').value=name;
+  document.getElementById('d-remark').value=remark;
+  document.getElementById('dep-edit-modal').style.display='flex';
+}
+function delDep(did, name){
+  if(!confirm(TR('确定删除部门')+' '+name+TR(' ？\n{{ tr('（') }}部门下有用户时无法删除{{ tr('）') }}\n删除后进入回收站{{ tr('（') }}')+TR('管理员可恢复')+'{{ tr('）') }}')) return;
+  const f=document.createElement('form'); f.method='post'; f.action='/departments/'+did+'/delete';
+  document.body.appendChild(f); f.submit();
+}
+</script>
+{% endblock %}

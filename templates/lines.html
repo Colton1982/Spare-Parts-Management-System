@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+{% block title %}{{ tr('page_lines') }} - Spare Parts Management System{% endblock %}
+{% block page_title %}>{{ tr('page_lines') }}{% endblock %}
+{% block content %}
+
+<div class="card">
+  <div class="card-title">{{ tr('新增产线') }}</div>
+  <form class="inline-form" method="post" action="{{ url_for('line_add') }}">
+    <input class="f-input" name="name" placeholder="{{ tr('产线名称，如：SMT-1线') }}" required>
+    <input class="f-input" name="remark" placeholder="{{ tr('备注(可空)') }}">
+    <button class="btn btn-primary" type="submit">{{ tr('添加产线') }}</button>
+  </form>
+  <div class="muted small">{{ tr('产线维护后，可在「备件信息维护（建档）」中为备件配置适用的产线/设备；产线下有设备或备件适用记录时不允许删除。') }}</div>
+</div>
+
+<div class="card">
+  <div class="card-title">{{ tr('新增设备') }}</div>
+  <form class="inline-form" method="post" action="{{ url_for('equipment_add') }}">
+    <select class="f-input" name="line_id">
+      <option value="">{{ tr('所属产线（可空=未分配）') }}</option>
+      {% for l in lines %}<option value="{{ l.id }}">{{ l.name }}</option>{% endfor %}
+    </select>
+    <input class="f-input" name="name" placeholder="{{ tr('设备名称，如：贴片机1#（必填）') }}" required>
+    <input class="f-input" name="model" placeholder="{{ tr('型号(可空)') }}">
+    <input class="f-input" name="remark" placeholder="{{ tr('备注(可空)') }}">
+    <button class="btn btn-primary" type="submit">{{ tr('添加设备') }}</button>
+  </form>
+  <div class="muted small">{{ tr('设备名称用于备件「适用产线/设备」的选择；设备正被备件适用记录引用时不允许删除。') }}</div>
+</div>
+
+<div class="card">
+  <div class="card-title">{{ tr('产线列表') }}{{ tr('（') }}{{ tr('共') }} {{ lines|length }} {{ tr('条') }}{{ tr('）') }}</div>
+  <div class="table-wrap">
+    <table class="table">
+      <thead><tr><th>ID</th><th>{{ tr('产线名称') }}</th><th>{{ tr('备注') }}</th><th>{{ tr('设备数') }}</th><th>{{ tr('创建时间') }}</th><th>{{ tr('th_ops') }}</th></tr></thead>
+      <tbody>
+        {% for l in lines %}
+        <tr>
+          <td>{{ l.id }}</td>
+          <td><b>{{ l.name }}</b></td>
+          <td class="muted">{{ l.remark or '-' }}</td>
+          <td>{{ l.equip_count }}</td>
+          <td class="mono">{{ l.created_at }}</td>
+          <td class="ops">
+            <button class="btn btn-xs btn-danger" onclick="delLine({{ l.id }}, '{{ l.name }}')">{{ tr('btn_delete') }}</button>
+          </td>
+        </tr>
+        {% else %}<tr><td colspan="6" class="muted center">{{ tr('暂无产线，请先在上方添加') }}</td></tr>{% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-title">{{ tr('设备列表') }}{{ tr('（') }}{{ tr('共') }} {{ equip|length }} {{ tr('台') }}{{ tr('）') }}</div>
+  <div class="table-wrap">
+    <table class="table">
+      <thead><tr><th>ID</th><th>{{ tr('所属产线') }}</th><th>{{ tr('设备名称') }}</th><th>{{ tr('型号') }}</th><th>{{ tr('备注') }}</th><th>{{ tr('创建时间') }}</th><th>{{ tr('th_ops') }}</th></tr></thead>
+      <tbody>
+        {% for e in equip %}
+        <tr>
+          <td>{{ e.id }}</td>
+          <td>{{ e.line_name }}</td>
+          <td><b>{{ e.name }}</b></td>
+          <td class="mono">{{ e.model or '-' }}</td>
+          <td class="muted">{{ e.remark or '-' }}</td>
+          <td class="mono">{{ e.created_at }}</td>
+          <td class="ops">
+            <button class="btn btn-xs btn-danger" onclick="delEquip({{ e.id }}, '{{ e.name }}')">{{ tr('btn_delete') }}</button>
+          </td>
+        </tr>
+        {% else %}<tr><td colspan="7" class="muted center">{{ tr('暂无设备，请先在上方添加') }}</td></tr>{% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+function delLine(lid, name){
+  if(!confirm(TR('确定删除产线')+' '+name+TR(' ？\n{{ tr('（') }}产线下有设备或备件适用记录时无法删除{{ tr('）') }}'))) return;
+  const f=document.createElement('form'); f.method='post'; f.action='/lines/'+lid+'/delete';
+  document.body.appendChild(f); f.submit();
+}
+function delEquip(eid, name){
+  if(!confirm(TR('确定删除设备')+' '+name+TR(' ？\n{{ tr('（') }}设备正被备件适用记录引用时无法删除{{ tr('）') }}'))) return;
+  const f=document.createElement('form'); f.method='post'; f.action='/equipment/'+eid+'/delete';
+  document.body.appendChild(f); f.submit();
+}
+</script>
+{% endblock %}

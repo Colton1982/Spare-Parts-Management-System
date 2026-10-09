@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% block title %}{{ tr('操作记录') }} - Spare Parts Management System{% endblock %}
+{% block page_title %}>{{ tr('操作记录') }}{% endblock %}
+{% block content %}
+
+<div class="card">
+  <div class="card-title" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+    <span style="display:flex;align-items:center;gap:8px">
+      <a class="btn btn-xs" href="{{ url_for('parts_manage_page') if t=='part' else url_for('locations_page') }}">← {{ tr('返回') }}</a>
+      <span>{{ tr('操作记录') }}{{ tr('（') }}{{ tr('备件信息维护 / 货架管理的增加、删除、编辑等操作') }}{{ tr('）') }}</span>
+    </span>
+    <span style="display:flex;gap:6px">
+      <a class="btn {{ 'btn-primary' if t=='part' }}" href="{{ url_for('audit_page', type='part') }}">{{ tr('备件') }}</a>
+      <a class="btn {{ 'btn-primary' if t=='rack' }}" href="{{ url_for('audit_page', type='rack') }}">{{ tr('货架位置') }}</a>
+    </span>
+  </div>
+  <div class="table-wrap">
+    <table class="table">
+      <thead><tr>
+        <th>{{ tr('操作时间') }}</th>
+        <th>{{ tr('操作人') }}</th>
+        <th>{{ tr('操作类型') }}</th>
+        <th>{{ tr('对象') }}</th>
+        <th>{{ tr('修改内容') }}</th>
+      </tr></thead>
+      <tbody>
+        {% for r in rows %}
+        {% set d = r.d %}
+        <tr>
+          <td class="mono" style="white-space:nowrap">{{ r.created_at }}</td>
+          <td>{{ r.operator_name }}</td>
+          <td>
+            {% if r.action=='add' %}<span class="tag tag-green">{{ tr('新增') }}</span>
+            {% elif r.action=='edit' %}<span class="tag tag-blue">{{ tr('编辑') }}</span>
+            {% elif r.action=='delete' %}<span class="tag tag-red">{{ tr('删除') }}</span>
+            {% elif r.action=='restore' %}<span class="tag tag-green">{{ tr('恢复') }}</span>
+            {% elif r.action=='purge' %}<span class="tag tag-red">{{ tr('彻底清除') }}</span>
+            {% else %}{{ r.action }}{% endif %}
+          </td>
+          <td class="mono">{{ r.obj_code }}</td>
+          <td style="max-width:520px">
+            {% if d.get('f') %}
+              <div style="display:flex;flex-direction:column;gap:2px;font-size:12px">
+                {% for k, pair in d.f.items() %}
+                  <div>
+                    {% if t=='part' %}<b>{{ tr(PART_FIELD_NAMES.get(k, k)) }}</b>
+                    {% else %}<b>{{ k }}</b>{% endif %}：
+                    {% if pair[0] %}<span class="muted"><s>{{ tr(pair[0]) }}</s></span> → {% endif %}<span>{{ tr(pair[1]) }}</span>
+                  </div>
+                {% endfor %}
+              </div>
+            {% elif d.get('note') %}<span class="muted">{{ d.note }}</span>
+            {% else %}<span class="muted">—</span>{% endif %}
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="5" class="muted" style="text-align:center;padding:24px">{{ tr('暂无操作记录') }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div class="pager" style="margin-top:10px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+    <span class="muted small">{{ tr('共 {0} 条 · 第 {1}/{2} 页').format(tot, page, pages) }}</span>
+    {% if page > 1 %}<a class="btn btn-xs" href="{{ url_for('audit_page', type=t, page=page-1) }}">{{ tr('上一页') }}</a>{% endif %}
+    {% if page < pages %}<a class="btn btn-xs" href="{{ url_for('audit_page', type=t, page=page+1) }}">{{ tr('下一页') }}</a>{% endif %}
+  </div>
+</div>
+
+{% endblock %}

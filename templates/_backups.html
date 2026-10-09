@@ -1,0 +1,25 @@
+{% if backups %}
+<div class="table-wrap">
+  <table class="table">
+    <thead><tr><th>{{ tr('文件名') }}</th><th>{{ tr('所在目录') }}</th><th>{{ tr('大小') }}</th><th>{{ tr('备份时间') }}</th><th></th></tr></thead>
+    <tbody>
+      {% for b in backups %}
+      <tr>
+        <td class="mono small">{{ b.name }}</td>
+        <td class="mono small" style="color:#64748b">{{ b.dir }}</td>
+        <td>{{ "%.1f"|format(b.size/1024) }} KB</td>
+        <td class="small">{{ b.mtime }}</td>
+        <td>
+          <form method="post" action="/settings" class="ajax-form" onsubmit="return confirm('{{ tr('确认删除该备份文件？此操作不可恢复') }}{{ tr('。') }}')">
+            <input type="hidden" name="backup_file" value="{{ b.name }}">
+            <button class="btn btn-xs" name="backup_delete" value="1">{{ tr('btn_delete') }}</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="muted small">{{ tr('暂无备份文件') }}{{ tr('。') }}{{ tr('点击') }}{{ tr('「') }}{{ tr('立即备份一次') }}{{ tr('」') }}{{ tr('可生成第一份备份') }}{{ tr('。') }}</div>
+{% endif %}

@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% block title %}{{ tr('page_my_records') }} - Spare Parts Management System{% endblock %}
+{% block page_title %}>{{ tr('page_my_records') }}{% endblock %}
+{% block content %}
+
+<div class="card">
+  <div class="card-title">{{ tr('我的出入库 / 操作记录（近200条）') }}</div>
+  <div class="table-wrap">
+    <table class="table">
+      <thead><tr>
+        <th>{{ tr('th_no') }}</th><th>{{ tr('th_time') }}</th><th>{{ tr('th_part') }}</th><th>{{ tr('th_type') }}</th><th>{{ tr('th_quantity') }}</th>
+        <th>{{ tr('th_location') }}</th><th>{{ tr('th_amount') }}</th><th>{{ tr('方式') }}</th><th>{{ tr('备注') }}</th>
+      </tr></thead>
+      <tbody>
+        {% for t in txs %}
+        <tr>
+          <td class="mono">{{ t.tx_no }}</td>
+          <td class="mono">{{ t.created_at }}</td>
+          <td>{{ t.part_code }}<br><span class="muted">{{ t.name }}</span></td>
+          <td>
+            {% if t.tx_type=='in' %}<span class="badge badge-ok">{{ tr('type_in') }}</span>
+            {% elif t.tx_type=='out' %}<span class="badge badge-danger">{{ tr('type_out') }}</span>
+            {% elif t.tx_type=='transfer' %}<span class="badge badge-info">{{ tr('type_adjust') }}</span>
+            {% elif t.tx_type=='transfer_in' %}<span class="badge badge-ok">{{ tr('调拨入') }}</span>
+            {% else %}<span class="badge badge-warn">{{ tr('调拨出') }}</span>{% endif %}
+          </td>
+          <td class="num">{{ t.quantity }} {{ t.unit }}</td>
+          <td>{{ t.location or '-' }}</td>
+          <td class="num">{{ '%.2f'|format(t.amount) }}</td>
+          <td>{% if t.ref_type=='application' %}<span class="muted small">{{ tr('申请单执行') }}</span>{% else %}<span class="muted small">{{ tr('直接操作') }}</span>{% endif %}</td>
+          <td class="muted">{{ t.remark or '-' }}</td>
+        </tr>
+        {% else %}<tr><td colspan="9" class="muted center">{{ tr('暂无操作记录') }}</td></tr>{% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-title">{{ tr('我的申请单（近200条）') }}</div>
+  <div class="table-wrap">
+    <table class="table">
+      <thead><tr>
+        <th>{{ tr('th_no') }}</th><th>{{ tr('th_time') }}</th><th>{{ tr('th_part') }}</th><th>{{ tr('th_type') }}</th><th>{{ tr('th_quantity') }}</th><th>{{ tr('th_status') }}</th><th>{{ tr('审批/处理意见') }}</th>
+      </tr></thead>
+      <tbody>
+        {% for a in apps %}
+        <tr>
+          <td class="mono">{{ a.app_no }}</td>
+          <td class="mono">{{ a.created_at }}</td>
+          <td>{{ a.part_code }}<br><span class="muted">{{ a.name }}</span>
+            {% if a.is_valuable %}<span class="badge badge-val">{{ tr('status_valuable') }}</span>{% endif %}</td>
+          <td>{% if a.app_type=='in' %}<span class="badge badge-ok">{{ tr('type_in') }}</span>
+            {% elif a.app_type=='transfer' %}<span class="badge badge-info">{{ tr('type_transfer') }}</span>
+            {% else %}<span class="badge badge-danger">{{ tr('type_out') }}</span>{% endif %}</td>
+          <td class="num">{{ a.quantity }}</td>
+          <td>
+            {% if a.status=='pending' %}<span class="badge badge-info">{{ tr('status_pending') }}</span>
+            {% elif a.status=='approved' %}<span class="badge badge-info">{{ tr('status_approved') }}</span>
+            {% elif a.status=='rejected' %}<span class="badge badge-warn">{{ tr('status_rejected') }}</span>
+            {% elif a.status=='cancel_req' %}<span class="badge badge-warn">{{ tr('status_cancel_req') }}</span>
+            {% elif a.status=='canceled' %}<span class="badge badge-muted">{{ tr('status_canceled') }}</span>
+            {% else %}<span class="badge badge-ok">{{ tr('status_completed') }}</span>{% endif %}
+          </td>
+          <td class="muted">{{ a.approval_note or a.operator_note or '-' }}</td>
+        </tr>
+        {% else %}<tr><td colspan="7" class="muted center">{{ tr('暂无申请单') }}</td></tr>{% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

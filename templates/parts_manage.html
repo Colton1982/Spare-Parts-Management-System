@@ -1,0 +1,584 @@
+{% extends "base.html" %}
+{% block title %}{{ tr('page_parts_manage') }} - Spare Parts Management System{% endblock %}
+{% block page_title %}>{{ tr('page_parts_manage') }}{% endblock %}
+{% block content %}
+
+<div class="toolbar">
+  <form class="toolbar-form" method="get">
+    <input class="f-input" type="text" name="kw" value="{{ kw }}" placeholder="{{ tr('料号') }} / {{ tr('名称') }} / {{ tr('规格') }}">
+    <select class="f-input" name="category">
+      <option value="">{{ tr('全部分类') }}</option>
+      {% for c in categories %}<option value="{{ c }}" {{ 'selected' if cat==c }}>{{ c }}</option>{% endfor %}
+    </select>
+    <select class="f-input" name="state">
+      <option value="">{{ tr('库存状态(全部)') }}</option>
+      <option value="low" {{ 'selected' if state=='low' }}>{{ tr('低于下限') }}</option>
+      <option value="high" {{ 'selected' if state=='high' }}>{{ tr('超过上限') }}</option>
+    </select>
+    <button class="btn" type="submit">{{ tr('btn_search') }}</button>
+    <a class="btn" href="{{ url_for('parts_manage_page') }}">{{ tr('btn_reset') }}</a>
+  </form>
+  <div class="toolbar-actions">
+    <button class="btn btn-primary" onclick="openAdd()">{{ tr('+ 新增备件') }}</button>
+    <a class="btn" href="{{ url_for('audit_page', type='part') }}">{{ tr('操作记录') }}</a>
+    {% if can('parts_manage', 'import') %}
+    <a class="btn" href="{{ url_for('parts_template') }}">{{ tr('下载导入模板') }}</a>
+    <form class="toolbar-form" method="post" action="{{ url_for('parts_import') }}" enctype="multipart/form-data" style="gap:6px">
+      <select class="f-input" name="mode" title="{{ tr('追加') }}{{ tr('只新增不覆盖已有料号') }}{{ tr('；') }}{{ tr('覆盖') }}{{ tr('按料号整体覆盖其全部信息与库存') }}" style="max-width:110px;padding:6px">
+        <option value="append">{{ tr('追加导入') }}</option>
+        <option value="overwrite">{{ tr('覆盖导入') }}</option>
+      </select>
+      <label class="btn btn-xs" style="margin:2px 0">{{ tr('选择文件') }}<input type="file" name="file" accept=".xlsx,.csv" required style="display:none" onchange="eFile(this)"></label>
+      <span class="muted small" id="e-file-name">{{ tr('未选择文件') }}</span>
+      <button class="btn" type="submit">{{ tr('导入备件') }}</button>
+    </form>
+    {% endif %}
+  </div>
+</div>
+<div style="display:flow-root;margin:-4px 0 10px">
+  {% if can('parts_manage', 'export') %}
+  <a class="btn btn-xs" style="float:right" href="{{ url_for('parts_export', kw=kw, category=cat, state=state) }}">📥 {{ tr('导出 Excel') }}</a>
+  {% endif %}
+  <span class="muted small">{{ tr('共') }} {{ parts|length }} {{ tr('条记录') }} · {{ tr('全库备件') }} {{ total_kinds }} 种 · {{ tr('库存总量') }} {{ total_stock|int }}</span>
+</div>
+<div class="muted small" style="margin:-4px 0 10px">{{ tr('本页用于备件建档与信息维护') }}{{ tr('（') }}{{ tr('仓管员及以上') }}{{ tr('）') }}{{ tr('：') }}{{ tr('新增') }}{{ tr('、') }}{{ tr('编辑') }}{{ tr('、') }}{{ tr('删除') }}{{ tr('、') }}{{ tr('图片') }}{{ tr('、') }}{{ tr('放置位置') }}{{ tr('、') }}{{ tr('自定义字段') }}{{ tr('备件查询页只读') }}{{ tr('。') }}
+  {{ tr('导入说明') }}{{ tr('：') }}<b>{{ tr('追加导入') }}</b>{{ tr('只新增、同料号跳过；') }}<b>{{ tr('覆盖导入') }}</b>{{ tr('按料号整体覆盖全部信息与库存') }}{{ tr('。') }}{{ tr('模板第') }} 2~3 {{ tr('行为填写示例') }}{{ tr('（') }}{{ tr('料号以') }}{{ tr('「') }}{{ tr('示例') }}-{{ tr('」') }}{{ tr('开头') }}{{ tr('，') }}{{ tr('导入时自动跳过') }}{{ tr('）') }}{{ tr('可直接照格式填写并删除示例行') }}{{ tr('。') }}{{ tr('数量类型填') }} <span class="mono">float</span> {{ tr('为小数、填') }} <span class="mono">int</span> {{ tr('或不填为整数，库存数量未填默认') }} 0{{ tr('，') }}
+  {{ tr('分类') }}/{{ tr('规格') }}/{{ tr('备注等未填默认') }}{{ tr('「') }}{{ tr('无') }}{{ tr('」') }}{{ tr('，') }}{{ tr('存放库位被占用或无法解析时库存导入') }}{{ tr('「') }}{{ tr('待定') }}{{ tr('」') }}{{ tr('。') }}</div>
+
+<div class="table-wrap">
+  <table class="table" id="parts-table">
+    <thead>
+      <tr>
+        <th>{{ tr('图片') }}</th><th>{{ tr('th_code') }}</th><th>{{ tr('th_name') }}</th><th>{{ tr('分类') }}</th><th>{{ tr('规格') }}</th>
+        {% if can('price') %}<th>{{ tr('单价(元)') }}</th>{% endif %}<th>{{ tr('库存') }}</th><th>{{ tr('上下限') }}</th><th>{{ tr('存放库位') }}</th><th>{{ tr('适用产线/设备') }}</th>
+        {% for ef in extra_fields %}<th>{{ ef.label }}</th>{% endfor %}
+        <th>{{ tr('status_valuable') }}</th><th>{{ tr('th_ops') }}</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for p in parts %}
+      <tr id="part-{{ p.id }}">
+        <td>
+          {% if p.image_file %}
+          <img class="cell-img" src="{{ url_for('media', fname=p.image_file) }}" onclick="viewImg(this)" title="{{ tr('点击放大') }}">
+          {% else %}<span class="muted">{{ tr('无图') }}</span>{% endif %}
+        </td>
+        <td class="mono">{{ p.part_code }}</td>
+        <td><a href="javascript:;" onclick="viewPart({{ p.id }})">{{ p.name }}</a></td>
+        <td>{{ p.category or '-' }}</td>
+        <td class="mono">{{ p.spec or '-' }}</td>
+        {% if can('price') %}<td class="num">{{ '%.2f'|format(p.unit_price) }}</td>{% endif %}
+        <td class="num"><b>{{ p.stock }}</b> {{ p.unit }}</td>
+        <td class="num">{{ p.min_stock }} / {{ p.max_stock or '∞' }}</td>
+        <td class="mono small">{{ p.stock_locs_text or (p.location_text or '-') }}</td>
+        <td class="muted small">{{ p.apps_text or '-' }}</td>
+        {% for ef in extra_fields %}<td class="muted">{{ p.extra.get(ef.key, '') or '-' }}</td>{% endfor %}
+        <td>{% if p.is_valuable %}<span class="badge badge-val">{{ tr('status_valuable') }}</span>{% else %}-{% endif %}</td>
+        <td class="ops">
+          <button class="btn btn-xs" onclick="viewPart({{ p.id }})">{{ tr('btn_details') }}</button>
+          <button class="btn btn-xs" onclick="openEdit({{ p.id }})">{{ tr('btn_edit') }}</button>
+          <button class="btn btn-xs btn-danger" onclick="delPart({{ p.id }}, '{{ p.part_code }}')">{{ tr('btn_delete') }}</button>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="{{ (12 if can('price') else 11) + extra_fields|length }}" class="muted center">{{ tr('没有符合条件的备件') }}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+<p class="muted small">{{ tr('本页用于备件建档与信息维护') }}{{ tr('（') }}{{ tr('仓管员及以上') }}{{ tr('）') }}</p>
+
+<!-- 详情弹窗 -->
+<div class="modal-mask" id="detail-modal" style="display:none" onclick="if(event.target===this)closeModal('detail-modal')">
+  <div class="modal">
+    <div class="modal-head"><span>{{ tr('备件详情') }}</span><button class="modal-x" onclick="closeModal('detail-modal')">✕</button></div>
+    <div class="modal-body" id="detail-body">{{ tr('加载中…') }}</div>
+  </div>
+</div>
+
+<!-- 新增弹窗 -->
+<div class="modal-mask" id="add-modal" style="display:none" onclick="if(event.target===this)closeModal('add-modal')">
+  <div class="modal">
+    <div class="modal-head"><span>{{ tr('新增备件') }}</span><button class="modal-x" onclick="closeModal('add-modal')">✕</button></div>
+    <form class="modal-body" method="post" action="{{ url_for('part_add') }}" enctype="multipart/form-data">
+      <div class="grid2">
+        <label class="f-label">{{ tr('料号 *') }}<input class="f-input" name="part_code" required></label>
+        <label class="f-label">{{ tr('名称 *') }}<input class="f-input" name="name" required></label>
+        <label class="f-label">{{ tr('分类') }}<input class="f-input" name="category" placeholder="{{ tr('如：电阻/IC/辅料') }}"></label>
+        <label class="f-label">{{ tr('规格型号') }}<input class="f-input" name="spec"></label>
+        <label class="f-label">{{ tr('单位') }}<input class="f-input" name="unit" value="个"></label>
+        <label class="f-label">{{ tr('数量类型') }}<select class="f-input" name="qty_decimal" onchange="syncAddQtyMode(this)">
+            <option value="int">int{{ tr('（') }}{{ tr('整数') }}{{ tr('：') }}{{ tr('个') }}/PCS/{{ tr('卷') }}…{{ tr('）') }}</option>
+            <option value="float">float{{ tr('（') }}{{ tr('小数') }}{{ tr('：') }}{{ tr('米') }}/{{ tr('克') }}/KG…{{ tr('）') }}</option>
+          </select>
+        </label>
+        {% if can('price') %}<label class="f-label">{{ tr('单价(元)') }}<input class="f-input" name="unit_price" type="number" step="0.01" min="0" value="0"></label>{% endif %}
+        <label class="f-label">{{ tr('最低库存') }}<input class="f-input" name="min_stock" type="number" step="1" min="0" value="0"></label>
+        <label class="f-label">{{ tr('最高库存') }}<input class="f-input" name="max_stock" type="number" step="1" min="0" value="0"></label>
+        <label class="f-label">{{ tr('供应商') }}<input class="f-input" name="supplier"></label>
+        <label class="f-check"><input type="checkbox" name="is_valuable" value="1"> {{ tr('贵重备件') }}{{ tr('（出库需经理审批）') }}</label>
+      </div>
+      <div class="f-label" style="margin-top:10px">{{ tr('初始库存库位') }}{{ tr('（') }}{{ tr('可多个') }}{{ tr('；') }}{{ tr('一个备件可占用多个货位') }}{{ tr('，') }}{{ tr('出库时按库位扣减') }}{{ tr('）') }}</div>
+      <div id="add-inv-rows"></div>
+      <button type="button" class="btn btn-xs" onclick="addInvRow('add-inv-rows','addinv')">{{ tr('＋ 添加库位') }}</button>
+      <div class="muted small">{{ tr('每行选择') }} {{ tr('仓库') }}-{{ tr('货架') }}-{{ tr('货位') }}-{{ tr('格位') }} {{ tr('与数量') }}{{ tr('；') }}{{ tr('格位号可空') }}={{ tr('整货位') }}{{ tr('已被其他备件存放的位置不可选') }}{{ tr('。') }}</div>
+
+      <div class="f-label" style="margin-top:10px">{{ tr('适用产线') }}/{{ tr('设备') }}{{ tr('（') }}{{ tr('只选设备或产线即可') }}{{ tr('；') }}{{ tr('设备未关联产线的也可选') }}{{ tr('）') }}</div>
+      <div id="add-pa-rows"></div>
+      <button type="button" class="btn btn-xs" onclick="addPaRow('add-pa-rows','addpa')">＋ {{ tr('添加适用产线') }}/{{ tr('设备') }}</button>
+      {% for ef in extra_fields %}
+      <label class="f-label" style="margin-top:8px">{{ ef.label }}<input class="f-input" name="extra_{{ ef.key }}"></label>
+      {% endfor %}
+      <label class="f-label" style="margin-top:8px">{{ tr('备注') }}<textarea class="f-input" name="remark" rows="2"></textarea></label>
+      <div class="modal-foot"><button class="btn btn-primary" type="submit">{{ tr('btn_save') }}</button>
+      <button class="btn" type="button" onclick="closeModal('add-modal')">{{ tr('btn_cancel') }}</button></div>
+    </form>
+  </div>
+</div>
+
+<!-- 编辑弹窗 -->
+<div class="modal-mask" id="edit-modal" style="display:none" onclick="if(event.target===this)closeModal('edit-modal')">
+  <div class="modal">
+    <div class="modal-head"><span>{{ tr('编辑备件') }}</span><button class="modal-x" onclick="closeModal('edit-modal')">✕</button></div>
+    <form class="modal-body" method="post" id="edit-form" enctype="multipart/form-data">
+      <div class="grid2">
+        <label class="f-label">{{ tr('名称 *') }}<input class="f-input" name="name" id="e-name" required></label>
+        <label class="f-label">{{ tr('分类') }}<input class="f-input" name="category" id="e-category"></label>
+        <label class="f-label">{{ tr('规格型号') }}<input class="f-input" name="spec" id="e-spec"></label>
+        <label class="f-label">{{ tr('单位') }}<input class="f-input" name="unit" id="e-unit"></label>
+        <label class="f-label">{{ tr('数量类型') }}<select class="f-input" name="qty_decimal" id="e-qty-decimal" onchange="syncEditQtyMode(this)">
+            <option value="int">int{{ tr('（') }}{{ tr('整数') }}{{ tr('：') }}{{ tr('个') }}/PCS/{{ tr('卷') }}…{{ tr('）') }}</option>
+            <option value="float">float{{ tr('（') }}{{ tr('小数') }}{{ tr('：') }}{{ tr('米') }}/{{ tr('克') }}/KG…{{ tr('）') }}</option>
+          </select>
+          <span class="muted small">{{ tr('由小数改为整数时，该备件现有库存数量会自动取整') }}{{ tr('（') }}{{ tr('四舍五入') }}{{ tr('）') }}</span>
+        </label>
+        {% if can('price') %}<label class="f-label">{{ tr('单价(元)') }}<input class="f-input" name="unit_price" id="e-price" type="number" step="0.01" min="0"></label>{% endif %}
+        <label class="f-label">{{ tr('供应商') }}<input class="f-input" name="supplier" id="e-supplier"></label>
+        <label class="f-label">{{ tr('最低库存') }}<input class="f-input" name="min_stock" id="e-min" type="number" step="1" min="0"></label>
+        <label class="f-label">{{ tr('最高库存') }}<input class="f-input" name="max_stock" id="e-max" type="number" step="1" min="0"></label>
+      </div>
+      <label class="f-check"><input type="checkbox" name="is_valuable" id="e-valuable" value="1"> {{ tr('贵重备件') }}{{ tr('（出库需高级审批）') }}</label>
+
+      <div class="loc-block">
+        <div class="loc-block-title">{{ tr('库存库位') }}{{ tr('（') }}{{ tr('可多个') }}{{ tr('出库按所选库位扣减') }}{{ tr('；') }}{{ tr('无任何库位') }} = {{ tr('待定') }}{{ tr('，') }}{{ tr('不可领用') }}{{ tr('）') }}</div>
+        <div id="e-inv-list" class="muted small" style="margin:4px 0">{{ tr('加载中…') }}</div>
+        <div class="muted small" style="margin:2px 0 6px">{{ tr('备件实际存放在这些库位并各有数量') }}{{ tr('；') }}{{ tr('删除库位需先将其库存清零') }}{{ tr('。') }}</div>
+        <div style="margin-top:6px">
+          <div class="muted small" id="inv-space-msg" style="margin:0 0 4px"></div>
+          <div class="loc-cascade" data-mode="invadd">
+            <select name="inv_wh" onchange="cascade(this,'invadd')"><option value="">{{ tr('仓库号…') }}</option></select>
+            <select name="inv_rack" onchange="cascade(this,'invadd')"><option value="">{{ tr('货架号…') }}</option></select>
+            <select name="inv_shelf" onchange="cascade(this,'invadd')"><option value="">{{ tr('货位号…') }}</option></select>
+            <select name="inv_location_id" onchange="invOccMsg(this)"><option value="">{{ tr('格位号…（可空）') }}</option></select>
+          </div>
+          <span class="inline-form" style="margin-top:4px">
+            <input class="f-input" type="number" name="inv_add_qty" id="e-inv-add-qty" step="0.001" min="0" placeholder="{{ tr('库存数量') }}{{ tr('（') }}{{ tr('可空') }}=0{{ tr('）') }}" style="max-width:150px">
+            <button type="button" class="btn btn-xs btn-primary" onclick="addInvLoc()">{{ tr('＋ 添加库位') }}</button>
+            <button type="button" class="btn btn-xs" onclick="invReset()">{{ tr('清空选择') }}</button>
+            <span class="muted small" id="inv-occ-msg" style="margin-left:8px"></span>
+          </span>
+        </div>
+      </div>
+
+      <div class="f-label" style="margin-top:12px">{{ tr('适用产线') }}/{{ tr('设备') }}{{ tr('（') }}{{ tr('只选设备或产线即可') }}{{ tr('；') }}{{ tr('设备未关联产线的也可选') }}{{ tr('）') }}</div>
+      <div id="edit-pa-rows"></div>
+      <button type="button" class="btn btn-xs" onclick="addPaRow('edit-pa-rows','editpa')">＋ {{ tr('添加适用产线') }}/{{ tr('设备') }}</button>
+      <div class="muted small" style="margin:4px 0">{{ tr('数据来源') }}{{ tr('「产线与设备配置」页维护的产线与设备') }}{{ tr('。') }}</div>
+
+      <div class="f-label" style="margin-top:12px">{{ tr('备件图片') }}{{ tr('（') }}{{ tr('上传即替换') }}{{ tr('，') }}{{ tr('可删除') }}{{ tr('）') }}</div>
+      <div class="img-edit">
+        <div id="e-img-preview"><span class="muted small">{{ tr('暂无图片') }}</span></div>
+        <div class="img-edit-btns">
+          <label class="btn btn-xs">{{ tr('选择图片') }}<input type="file" name="image" accept="image/*" style="display:none" onchange="eImgName(this)"></label>
+          <span class="muted small" id="e-img-name"></span>
+          <button class="btn btn-xs btn-danger" type="button" onclick="delImg()">{{ tr('删除图片') }}</button>
+        </div>
+      </div>
+
+      {% for ef in extra_fields %}
+      <label class="f-label" style="margin-top:8px">{{ ef.label }}<input class="f-input" name="extra_{{ ef.key }}" id="e-extra-{{ ef.key }}"></label>
+      {% endfor %}
+      <label class="f-label" style="margin-top:8px">{{ tr('备注') }}<textarea class="f-input" name="remark" id="e-remark" rows="2"></textarea></label>
+      <div class="modal-foot"><button class="btn btn-primary" type="submit">{{ tr('保存修改') }}</button>
+      <button class="btn" type="button" onclick="closeModal('edit-modal')">{{ tr('btn_cancel') }}</button></div>
+    </form>
+  </div>
+</div>
+
+<!-- 图片放大 -->
+<div class="modal-mask" id="img-modal" style="display:none;background:rgba(0,0,0,.7)" onclick="closeModal('img-modal')">
+  <div class="modal modal-img"><img id="img-zoom" src="" style="max-width:100%;max-height:82vh;border-radius:8px"></div>
+</div>
+
+{% endblock %}
+{% block scripts %}
+<script>
+// 金额敏感：SEE_PRICE=false（无「备件金额查看」权限，普通用户默认）时全站隐藏单价/金额
+const SEE_PRICE = {{ 'true' if can('price') else 'false' }};
+// 全部位置（含占用信息），用于级联与占用判断
+const LOCS = {{ locations | tojson }};
+const EF = {{ extra_fields | tojson }};
+const LINES = {{ lines | tojson }};
+const EQUIP = {{ equipment | tojson }};
+let EDIT_PID = null;
+
+/* ---------- 库位数量输入模式：整数类备件禁止输入小数 ---------- */
+function qtyInputMode(inp, isFloat){
+  if(!inp) return;
+  inp.step = isFloat ? '0.001' : '1';
+  inp.oninput = isFloat ? null : function(){
+    if(this.value && this.value.indexOf('.') >= 0){
+      const v = parseFloat(this.value);
+      this.value = Number.isFinite(v) ? String(Math.trunc(v)) : '';
+    }
+  };
+}
+function syncAddQtyMode(sel){
+  const isFloat = (sel && sel.value==='float');
+  document.querySelectorAll('#add-inv-rows input[name="inv_qty[]"]').forEach(i=>qtyInputMode(i,isFloat));
+}
+function syncEditQtyMode(sel){
+  qtyInputMode(document.getElementById('e-inv-add-qty'), sel && sel.value==='float');
+}
+
+/* ---------- 库位空位提示（格位计数：每个位置记录=1 个格位，整货位无格位号也算 1 格） ---------- */
+function freeSpaces(pool){
+  let n = 0;
+  for(const l of pool){ if(!l.part_id) n++; }
+  return n;
+}
+function spaceMsgEl(box){
+  return box.querySelector('.inv-space') || document.getElementById('inv-space-msg');
+}
+function updateSpaceMsg(el, levelName, val, pool){
+  if(!el) return;
+  if(!val){ el.textContent=''; return; }
+  el.textContent = levelName+'{{ tr('「') }}'+val+'{{ tr('」') }}'+TR('范围空闲')+' '+freeSpaces(pool)+TR(' 个格位{{ tr('（') }}')+TR('未占用')+'{{ tr('）') }}';
+}
+
+/* ---------- 适用产线/设备（只选设备/整线，产线自动带出） ---------- */
+function paOptionHtml(){
+  // 产线/设备选项显示为纯名称：产线不带「（整线）」，设备不带产线前缀/「（未分配产线）」后缀
+  let html = '<option value="">{{ tr('选择设备或产线') }}…</option>';
+  if(LINES.length) html += '<optgroup label="{{ tr('产线（整条产线适用）') }}">' + LINES.map(l=>'<option value="L'+l.id+'">'+esc(l.name)+'</option>').join('') + '</optgroup>';
+  html += '<optgroup label="'+TR('设备')+'">' + EQUIP.map(e=>{
+    return '<option value="E'+e.id+'">'+esc(e.name)+(e.model?'{{ tr('（') }}'+esc(e.model)+'{{ tr('）') }}':'')+'</option>';
+  }).join('') + '</optgroup>';
+  return html;
+}
+function paSyncHidden(box){
+  const sel = box.querySelector('select[name="pa_sel[]"]');
+  const hl = box.querySelector('input[name="pa_line[]"]');
+  const he = box.querySelector('input[name="pa_equip[]"]');
+  const v = sel.value;
+  if(v.startsWith('L')){ hl.value = v.slice(1); he.value=''; }
+  else if(v.startsWith('E')){
+    const e = EQUIP.find(x=>x.id===Number(v.slice(1)));
+    hl.value = (e && e.line_id) ? String(e.line_id) : '';
+    he.value = e ? String(e.id) : '';
+  } else { hl.value=''; he.value=''; }
+}
+function addPaRow(containerId, mode){
+  const box = document.createElement('div');
+  box.className = 'pa-row';
+  box.style.cssText = 'display:flex;gap:6px;align-items:center;margin:4px 0;flex-wrap:wrap';
+  box.innerHTML =
+    '<select class="f-input" name="pa_sel[]" style="min-width:280px">' + paOptionHtml() + '</select>' +
+    '<input type="hidden" name="pa_line[]" value="">' +
+    '<input type="hidden" name="pa_equip[]" value="">' +
+    '<button type="button" class="btn btn-xs btn-danger" onclick="this.parentNode.remove()">✕</button>';
+  box.querySelector('select[name="pa_sel[]"]').addEventListener('change', ()=>{ paSyncHidden(box); });
+  document.getElementById(containerId).appendChild(box);
+}
+function renderPaRows(containerId, apps){
+  const box = document.getElementById(containerId);
+  box.innerHTML = '';
+  const list = apps && apps.length ? apps : [null];
+  list.forEach(a=>{
+    addPaRow(containerId, containerId==='add-pa-rows'?'addpa':'editpa');
+    const rows = box.querySelectorAll('.pa-row');
+    const row = rows[rows.length-1];
+    if(a){
+      const sel = row.querySelector('select[name="pa_sel[]"]');
+      sel.value = a.equipment_id ? ('E'+a.equipment_id) : (a.line_id ? ('L'+a.line_id) : '');
+      paSyncHidden(row);
+    }
+  });
+}
+
+function openAdd(){
+  document.getElementById('add-modal').style.display='flex';
+  document.getElementById('add-inv-rows').innerHTML='';
+  addInvRow('add-inv-rows','addinv');
+  renderPaRows('add-pa-rows', []);
+}
+function closeModal(id){ document.getElementById(id).style.display='none'; }
+function viewImg(el){ document.getElementById('img-zoom').src=el.src; document.getElementById('img-modal').style.display='flex'; }
+
+/* ---------- 位置级联（新增/编辑弹窗的库存库位选择共用） ---------- */
+// 全部位置均可选（含已占用）；空位置（空闲）排在最前面；
+// 选项文本标注占用状态；保存时后端二次校验占用（有重复则报错拒绝）
+function occTag(loc){
+  if(!loc.part_id) return TR('{{ tr('（') }}空闲{{ tr('）') }}');
+  if(EDIT_PID && loc.part_id===EDIT_PID) return '{{ tr('（') }}{{ tr('本备件占用') }}{{ tr('）') }}';
+  return TR('（被 {0} 占用）').replace('{0}', esc(loc.part_code));
+}
+function cascade(el, mode){
+  // 基于元素在级联容器内的位置定位级别（支持任意多组级联共存）
+  const box = el.closest('.loc-cascade');
+  const sel = box.querySelectorAll('select');
+  const idx = Array.prototype.indexOf.call(sel, el);
+  if(idx < 0) return;
+  const vals = [];
+  for(let i=0;i<=idx;i++){ vals.push(sel[i].value); }
+  const next = sel[idx+1];
+  if(!next) return;
+  // 按已选值过滤（全部位置，不过滤占用）
+  let pool = LOCS;
+  for(let i=0;i<=idx;i++){
+    if(!vals[i]) break;
+    const key = ['warehouse','rack','shelf','bin'][i];
+    pool = pool.filter(l=>l[key]===vals[i]);
+  }
+  const key = ['warehouse','rack','shelf','bin'][idx+1];
+  const phSel = next.getAttribute('data-ph') || '…';
+  const phMap = {loc_warehouse:TR('仓库号…'),loc_rack:TR('货架号…'),loc_shelf:TR('货位号…'),location_id:TR('格位号…{{ tr('（') }}可空{{ tr('）') }}'),
+                 inv_wh:TR('仓库号…'),inv_rack:TR('货架号…'),inv_shelf:TR('货位号…'),inv_location_id:TR('格位号…{{ tr('（') }}可空{{ tr('）') }}')};
+  const ph = phMap[next.name] || phSel;
+  let opts = '';
+  if(key === 'bin'){
+    // 格位级：该货位下的位置（含整货位 bin=''），空闲在前
+    const items = [...pool].sort((a,b)=>((a.part_id?1:0)-(b.part_id?1:0)) || a.bin.localeCompare(b.bin));
+    opts = items.map(loc=>{
+      const label = loc.bin || '{{ tr('（') }}{{ tr('整货位') }}{{ tr('，') }}{{ tr('不细分格位') }}{{ tr('）') }}';
+      return '<option value="'+loc.id+'">'+esc(label+' '+occTag(loc))+'</option>';
+    }).join('');
+  }else{
+    // 中间级：去重，保持 LOCS 排序（空闲优先）
+    const seen = new Map();
+    for(const l of pool){ if(!seen.has(l[key])) seen.set(l[key], l); }
+    opts = [...seen.values()].map(l=>'<option value="'+esc(l[key])+'">'+esc(l[key])+'</option>').join('');
+  }
+  next.innerHTML = '<option value="">'+ph+'</option>' + opts;
+  // {{ tr('清空后续级') }}（占位符取各列名称映射，{{ tr('动态行用') }} data-ph）
+  for(let i=idx+2;i<4;i++){ sel[i].innerHTML = '<option value="">'+(phMap[sel[i].name]||sel[i].getAttribute('data-ph')||'…')+'</option>'; }
+  // 当前已选级别的空位提示（格位计数）
+  const spaceEl = spaceMsgEl(box);
+  if(spaceEl){
+    const levelName = [TR('仓库'),TR('货架'),TR('货位')][idx] || '';
+    updateSpaceMsg(spaceEl, levelName, vals[idx] || '', pool);
+  }
+}
+
+/* ---------- 图片 ---------- */
+function eFile(input){
+  var n = document.getElementById('e-file-name');
+  if(n) n.textContent = input.files && input.files[0] ? input.files[0].name : TR('未选择文件');
+}
+function eImgName(input){
+  document.getElementById('e-img-name').textContent = input.files[0] ? input.files[0].name : '';
+}
+function delImg(){
+  if(!EDIT_PID) return;
+  if(!confirm(TR('确定删除该备件的图片？'))) return;
+  const f=document.createElement('form'); f.method='post'; f.action='/parts/'+EDIT_PID+'/image/delete';
+  document.body.appendChild(f); f.submit();
+}
+
+/* ---------- 详情/新增/编辑 ---------- */
+function viewPart(pid){
+  const m = document.getElementById('detail-modal');
+  m.style.display='flex';
+  document.getElementById('detail-body').innerHTML=TR('加载中…');
+  fetch('/api/parts/'+pid).then(r=>r.json()).then(d=>{
+    const locRows = d.locations.filter(l=>Number(l.quantity)>0);
+    const locs = locRows.map(l=>'<tr><td>'+esc(l.location)+'</td><td class="num">'+fmt(l.quantity)+'</td></tr>').join('');
+    const extraHtml = EF.map(ef=>'<p><b>'+esc(ef.label)+'{{ tr('：') }}</b>'+esc(d.extra[ef.key]||'-')+'</p>').join('');
+    const appsHtml = (d.apps&&d.apps.length)
+      ? d.apps.map(a=>{
+          const lab = a.equip_name ? a.equip_name : (a.line_name || '');
+          return '<span class="badge" style="background:#eef4fb;color:#3b5f8a">'+esc(lab)+'</span>';
+        }).join(' ')
+      : '-';
+    document.getElementById('detail-body').innerHTML =
+      '<div class="detail-grid">' +
+      (d.image_url ? '<div><img class="detail-img" src="'+d.image_url+'" onclick="viewImg(this)"></div>' : '<div class="muted">{{ tr('暂无图片') }}</div>') +
+      '<div>' +
+      '<p><b>{{ tr('料号') }}{{ tr('：') }}</b><span class="mono">'+esc(d.part_code)+'</span></p>' +
+      '<p><b>{{ tr('名称') }}{{ tr('：') }}</b>'+esc(d.name)+'</p>' +
+      '<p><b>{{ tr('分类') }}{{ tr('：') }}</b>'+esc(d.category||'-')+'</p>' +
+      '<p><b>{{ tr('规格') }}{{ tr('：') }}</b>'+esc(d.spec||'-')+'</p>' +
+      '<p><b>{{ tr('单位') }}{{ tr('：') }}</b>'+esc(d.unit)+'</p>' +
+      (SEE_PRICE ? '<p><b>{{ tr('单价') }}{{ tr('：') }}</b>'+fmt(d.unit_price)+' {{ tr('元') }}</p>' : '') +
+      '<p><b>{{ tr('供应商') }}{{ tr('：') }}</b>'+esc(d.supplier||'-')+'</p>' +
+      '<p><b>{{ tr('适用产线') }}/{{ tr('设备') }}{{ tr('：') }}</b>'+appsHtml+'</p>' +
+      '<p><b>{{ tr('库存上下限') }}{{ tr('：') }}</b>'+fmt(d.min_stock)+' ~ '+(d.max_stock?fmt(d.max_stock):'∞')+'</p>' +
+      '<p><b>{{ tr('贵重备件') }}{{ tr('：') }}</b>'+(d.is_valuable?'<span class="badge badge-val">{{ tr('status_valuable') }}</span>':TR('否'))+'</p>' +
+      '<p><b>{{ tr('总库存') }}{{ tr('：') }}</b>'+fmt(d.total_stock)+' '+esc(d.unit)+'</p>' +
+      extraHtml +
+      '<p><b>{{ tr('备注') }}{{ tr('：') }}</b>'+esc(d.remark||'-')+'</p>' +
+      '</div></div>' +
+      '<h4 class="sub-h">{{ tr('库位分布') }}{{ tr('（') }}{{ tr('共') }} '+locRows.length+' {{ tr('个有库存库位') }}{{ tr('）') }}</h4><table class="table"><thead><tr><th>{{ tr('th_location') }}</th><th>{{ tr('th_quantity') }}</th></tr></thead><tbody>'+
+      (locs||'<tr><td colspan="2" class="muted">{{ tr('无库存') }}</td></tr>')+'</tbody></table>';
+  }).catch(e=>{ document.getElementById('detail-body').innerHTML='<span class="muted">{{ tr('加载失败') }}</span>'; });
+}
+
+function openEdit(pid){
+  EDIT_PID = pid;
+  fetch('/api/parts/'+pid).then(r=>r.json()).then(d=>{
+    document.getElementById('edit-form').action = '/parts/'+pid+'/edit';
+    document.getElementById('e-name').value=d.name||'';
+    document.getElementById('e-category').value=d.category||'';
+    document.getElementById('e-spec').value=d.spec||'';
+    document.getElementById('e-unit').value=d.unit||TR('个');
+    document.getElementById('e-qty-decimal').value = d.qty_decimal ? 'float' : 'int';
+    if(SEE_PRICE) document.getElementById('e-price').value=d.unit_price;
+    document.getElementById('e-supplier').value=d.supplier||'';
+    document.getElementById('e-min').value=d.min_stock;
+    document.getElementById('e-max').value=d.max_stock||'';
+    document.getElementById('e-valuable').checked=!!d.is_valuable;
+    document.getElementById('e-remark').value=d.remark||'';
+    EF.forEach(ef=>{ const el=document.getElementById('e-extra-'+ef.key); if(el) el.value=(d.extra&&d.extra[ef.key])||''; });
+    // {{ tr('图片') }}
+    const prev = document.getElementById('e-img-preview');
+    prev.innerHTML = d.image_url
+      ? '<img src="'+d.image_url+'" onclick="viewImg(this)" style="max-height:90px;border-radius:8px;cursor:zoom-in">'
+      : '<span class="muted small">{{ tr('暂无图片') }}</span>';
+    document.getElementById('e-img-name').textContent='';
+    // {{ tr('库存库位管理列表') }}（{{ tr('多库位平等') }}）
+    const invBox = document.getElementById('e-inv-list');
+    const invs = d.locations || [];
+    if(!invs.length){
+      invBox.innerHTML = '<span class="muted small">' + TR('当前无任何库存库位{{ tr('（') }}') + TR('可在下方添加') + TR('{{ tr('；') }}无库位时备件处于') + '{{ tr('「') }}' + TR('待定') + '{{ tr('」') }}' + TR('状态') + TR('{{ tr('，') }}不可领用') + '{{ tr('）') }}</span>';
+    } else {
+      invBox.innerHTML = '<table class="table" style="margin-top:4px"><thead><tr><th>{{ tr('th_location') }}</th><th>{{ tr('th_quantity') }}</th><th>{{ tr('th_status') }}</th><th>{{ tr('th_ops') }}</th></tr></thead><tbody>' +
+        invs.map(l=>{
+          const isPending = !Number(l.location_id);
+          const stateCell = isPending
+            ? '<span class="badge" style="background:#f59e0b">{{ tr('status_pending_short') }}</span>'
+            : '<span class="muted small">{{ tr('正常') }}</span>';
+          const opCell = (Number(l.quantity)>0
+            ? '<span class="muted small">{{ tr('有库存') }}{{ tr('，') }}{{ tr('需先出库') }}/{{ tr('调走清零') }}</span>'
+            : '<button class="btn btn-xs btn-danger" onclick="delInvLoc('+pid+','+(l.inv_id||'')+',\''+esc(l.location)+'\')">{{ tr('btn_delete') }}</button>');
+          return '<tr><td class="mono">'+esc(l.location)+'</td><td class="num">'+fmt(l.quantity)+'</td><td>'+stateCell+'</td><td>'+opCell+'</td></tr>';
+        }).join('') + '</tbody></table>';
+    }
+    // 适用产线/设备回显
+    renderPaRows('edit-pa-rows', d.apps || []);
+    // 清空添加区
+    const ibox = document.querySelector('[data-mode="invadd"]');
+    ibox.querySelectorAll('select').forEach(s=>{ s.value=''; });
+    // 填充仓库号下拉选项（级联第一步的仓库选项；不填充则无法选择位置）
+    const whSel = ibox.querySelector('select[name="inv_wh"]');
+    if(whSel && whSel.options.length <= 1){
+      const whs = [...new Set(LOCS.map(l=>l.warehouse))];
+      whSel.innerHTML = '<option value="">{{ tr('仓库号…') }}</option>' + whs.map(w=>'<option value="'+esc(w)+'">'+esc(w)+'</option>').join('');
+    }
+    document.getElementById('e-inv-add-qty').value='';
+    qtyInputMode(document.getElementById('e-inv-add-qty'), !!d.qty_decimal);
+    document.getElementById('inv-occ-msg').textContent='';
+    document.getElementById('inv-space-msg').textContent='';
+    document.getElementById('edit-modal').style.display='flex';
+  });
+}
+
+function delPart(pid, code){
+  if(!confirm(TR('确定删除备件')+' '+code+TR(' ？\n{{ tr('（') }}仅库存为 0 的备件可删除{{ tr('）') }}'))) return;
+  const f=document.createElement('form'); f.method='post'; f.action='/parts/'+pid+'/delete';
+  document.body.appendChild(f); f.submit();
+}
+
+/* ---------- 多库位：新增弹窗动态行 ---------- */
+function addInvRow(containerId, mode){
+  const box = document.createElement('div');
+  box.className = 'inv-row';
+  box.style.cssText = 'display:flex;gap:6px;align-items:center;margin:4px 0;flex-wrap:wrap';
+  box.innerHTML =
+    '<span class="loc-cascade" data-mode="'+mode+'">' +
+      '<select data-ph="'+TR('仓库号…')+'"><option value="">{{ tr('仓库号…') }}</option>' + whOptions() + '</select>' +
+      '<select data-ph="'+TR('货架号…')+'"><option value="">{{ tr('货架号…') }}</option></select>' +
+      '<select data-ph="'+TR('货位号…')+'"><option value="">{{ tr('货位号…') }}</option></select>' +
+      '<select data-ph="'+TR('格位号…{{ tr('（') }}可空{{ tr('）') }}')+'"><option value="">{{ tr('格位号…（可空）') }}</option></select>' +
+    '</span>' +
+    '<input type="hidden" name="inv_loc[]" value="">' +
+    '<input type="number" name="inv_qty[]" step="0.001" min="0" placeholder="{{ tr('数量') }}({{ tr('可空') }}=0)" style="max-width:100px">' +
+    '<span class="muted small inv-space" style="margin-left:4px"></span>' +
+    '<button type="button" class="btn btn-xs btn-danger" onclick="this.parentNode.remove()">✕</button>';
+  const qtyInp = box.querySelector('input[name="inv_qty[]"]');
+  const decSel = document.querySelector('#add-modal select[name="qty_decimal"]');
+  qtyInputMode(qtyInp, !!(decSel && decSel.value==='float'));
+  const sels = box.querySelectorAll('select');
+  sels.forEach(s=>{
+    s.addEventListener('change', function(){
+      const sel = box.querySelectorAll('select');
+      const idx = Array.prototype.indexOf.call(sel, this);
+      for(let i=idx+1;i<4;i++){ sel[i].innerHTML='<option value="">'+(sel[i].getAttribute('data-ph')||'…')+'</option>'; }
+      if(idx === 3){
+        const loc = LOCS.find(l=>String(l.id)===this.value);
+        box.querySelector('[name="inv_loc[]"]').value = loc ? loc.id : '';
+        box.querySelector('[name="inv_loc[]"]').dataset.occ = loc && loc.part_id ? '1' : '0';
+        // 该货位下的空闲格位提示
+        const box2 = this.closest('.loc-cascade');
+        let pool = LOCS;
+        for(let i=0;i<3;i++){ if(!sel[i].value) break; pool = pool.filter(l=>l[['warehouse','rack','shelf'][i]]===sel[i].value); }
+        updateSpaceMsg(spaceMsgEl(box2), TR('货位'), sel[2].value || '', pool);
+      } else if(idx < 3 && this.value){
+        cascade(this, mode);
+      }
+    });
+  });
+  document.getElementById(containerId).appendChild(box);
+}
+function whOptions(){
+  const whs = [...new Set(LOCS.map(l=>l.warehouse))];
+  return whs.map(w=>'<option value="'+esc(w)+'">'+esc(w)+'</option>').join('');
+}
+
+/* ---------- {{ tr('多库位') }}：{{ tr('编辑弹窗添加区') }} ---------- */
+function invOccMsg(el){
+  const box = el.closest('.loc-cascade');
+  const msg = document.getElementById('inv-occ-msg');
+  const sel = box.querySelectorAll('select');
+  const idx = Array.prototype.indexOf.call(sel, el);
+  for(let i=idx+1;i<4;i++){ sel[i].innerHTML='<option value="">'+(sel[i].getAttribute('data-ph')||'…')+'</option>'; }
+  if(!msg) return;
+  if(idx < 3){ msg.textContent=''; return; }
+  // 格位级：更新该货位下的空闲格位提示
+  let pool = LOCS;
+  for(let i=0;i<3;i++){ if(!sel[i].value) break; pool = pool.filter(l=>l[['warehouse','rack','shelf'][i]]===sel[i].value); }
+  updateSpaceMsg(document.getElementById('inv-space-msg'), TR('货位'), sel[2].value || '', pool);
+  const loc = LOCS.find(l=>String(l.id)===el.value);
+  if(!loc){ msg.textContent=''; return; }
+  if(loc.part_id){ msg.style.color='var(--red)'; msg.textContent='{{ tr('该位置已被备件') }} ['+loc.part_code+'] {{ tr('存放') }}{{ tr('，') }}{{ tr('不能添加') }}'; }
+  else { msg.style.color='var(--muted)'; msg.textContent='✔ {{ tr('空位') }}{{ tr('，') }}{{ tr('可添加') }}'; }
+}
+function addInvLoc(){
+  if(!EDIT_PID) return;
+  const box = document.querySelector('[data-mode="invadd"]');
+  const sel = box.querySelectorAll('select');
+  const locId = sel[3].value;
+  const qty = document.getElementById('e-inv-add-qty').value;
+  if(!locId){ alert('{{ tr('请选择完整库位') }}{{ tr('（') }}{{ tr('仓库') }}-{{ tr('货架') }}-{{ tr('货位') }}-{{ tr('格位') }}{{ tr('）') }}'); return; }
+  // 数量可留空=0（仅登记库位，可后续入库）；负数拦截
+  if(qty && Number(qty) < 0){ alert(TR('库存数量不能为负数')); return; }
+  const f=document.createElement('form'); f.method='post'; f.action='/parts/'+EDIT_PID+'/locations/add';
+  const i1=document.createElement('input'); i1.type='hidden'; i1.name='location_id'; i1.value=locId;
+  const i2=document.createElement('input'); i2.type='hidden'; i2.name='qty'; i2.value=qty;
+  f.appendChild(i1); f.appendChild(i2); document.body.appendChild(f); f.submit();
+}
+function delInvLoc(pid, invId, loc){
+  if(!confirm(TR('确定删除该库位 [')+loc+TR('] ？{{ tr('（') }}仅该库位库存为 0 时可删除{{ tr('）') }}'))) return;
+  const f=document.createElement('form'); f.method='post'; f.action='/parts/'+pid+'/locations/'+invId+'/delete';
+  document.body.appendChild(f); f.submit();
+}
+function invReset(){
+  const box = document.querySelector('[data-mode="invadd"]');
+  box.querySelectorAll('select').forEach(s=>{ s.value=''; });
+  const m = document.getElementById('inv-occ-msg'); if(m) m.textContent='';
+  document.getElementById('e-inv-add-qty').value='';
+}
+
+function esc(s){ const d=document.createElement('div'); d.textContent=s==null?'':String(s); return d.innerHTML; }
+function fmt(v){ return Number(v||0).toLocaleString('zh-CN'); }
+</script>
+{% endblock %}

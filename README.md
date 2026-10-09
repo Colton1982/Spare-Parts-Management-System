@@ -8,7 +8,7 @@
 
 ### 项目简介
 
-面向产线备件管理的 Web 系统：备件建档、多库位库存、出入库调库申请与审批、呆滞物料分析、回收站、多数据库、AD 域登录、数据大屏，支持 9 种界面语言。内置 Python 运行时，双击 `Start.bat` 即可运行，无需安装 Python 或第三方包。
+面向制造工厂周边备件与辅料管理的 Web 系统：备件建档、多库位库存、出入库调库申请与审批、呆滞物料分析、回收站、多数据库、AD 域登录、数据大屏，支持 9 种界面语言。内置 Python 运行时，双击 `Start.bat` 即可运行，无需安装 Python 或第三方包。(需下载发行版)
 
 ### 功能模块
 
@@ -90,7 +90,7 @@ python3 app.py              # 默认端口 5000
 
 ### 开源
 
-- **许可证**：Apache-2.0——完全开源，可自由商用、修改、再分发，并附带专利授权（Copyright 2026 周臣，详见 `LICENSE`）
+- **许可证**：Apache-2.0——完全开源，可自由商用、修改、再分发，并附带专利授权（Copyright 2026 菜鸟大叔，详见 `LICENSE`）
 - **免责声明**：软件按「现状」(AS IS) 提供，作者不对使用后果承担任何责任，不提供任何明示或默示的担保（含适销性、特定用途适用性、不侵权）
 - **发布说明**：见 `开源发布指南.md`（安全检查、建仓、推送、Release 步骤）
 - **依赖安装**（使用方）：
@@ -110,7 +110,7 @@ python app.py                          # 浏览器打开 http://127.0.0.1:5000
 
 ### Overview
 
-A web-based spare parts management system for production lines: part master data, multi-location inventory, inbound/outbound & transfer requests with approval, stagnant material analysis, recycle bin, multiple database backends, AD domain login, and a data screen — with 9 UI languages. It bundles its own Python runtime: double-click `Start.bat`, no Python or third-party packages required.
+A web-based spare parts management system for production lines: part master data, multi-location inventory, inbound/outbound & transfer requests with approval, stagnant material analysis, recycle bin, multiple database backends, AD domain login, and a data screen — with 9 UI languages. It bundles its own Python runtime: double-click `Start.bat`, no Python or third-party packages required. （Requires downloading the release build）
 
 ### Modules
 

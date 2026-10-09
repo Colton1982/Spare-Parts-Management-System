@@ -1,0 +1,487 @@
+{% extends "base.html" %}
+{% block title %}{{ tr('page_dashboard') }} - Spare Parts Management System{% endblock %}
+{% block page_title %}>{{ tr('page_dashboard') }}{% endblock %}
+{% block content %}
+<style>
+.dash-head{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:14px}
+.modal-mask{position:fixed;inset:0;background:rgba(15,23,42,.45);z-index:200;display:flex;align-items:center;justify-content:center;padding:20px}
+.chart-cfg-panel{background:#fff;border-radius:14px;padding:18px 20px;box-shadow:0 10px 40px rgba(15,23,42,.25);max-width:760px;width:100%;max-height:88vh;overflow:auto}
+.cfg-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+.cfg-head-title{font-size:15px;font-weight:600;color:#0f172a}
+.cfg-close-x{border:none;background:#f1f5f9;border-radius:8px;width:28px;height:28px;cursor:pointer;font-size:14px;color:#475569;line-height:1}
+.cfg-close-x:hover{background:#e2e8f0}
+.cfg-row{display:flex;gap:20px;flex-wrap:wrap;align-items:flex-start}
+.cfg-block{min-width:150px}
+.cfg-title{font-size:12.5px;color:#334155;font-weight:600;margin-bottom:6px}
+.style-mini{display:inline-block;width:22px;height:22px;border-radius:6px;cursor:pointer;border:2px solid transparent;vertical-align:middle}
+.style-mini.on{border-color:#0f172a;box-shadow:0 0 0 2px rgba(255,255,255,.6) inset}
+.filter-bar{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin:4px 0 14px}
+.filter-bar .f-label{min-width:150px}
+.chart-card-wide{grid-column:1/-1}
+.an-table-wrap{overflow:auto;max-height:480px}
+.an-table-wrap table th{position:sticky;top:0;background:#f8fafc}
+</style>
+
+<div class="dash-head">
+  <div class="seg" id="view-tabs">
+    <button class="seg-btn active" data-tab="stock">{{ tr('库存分析') }}</button>
+    <button class="seg-btn" data-tab="in">{{ tr('入库分析') }}</button>
+    <button class="seg-btn" data-tab="out">{{ tr('出库分析') }}</button>
+    <button class="seg-btn" data-tab="uline">{{ tr('线体分析') }}</button>
+    <button class="seg-btn" data-tab="udevice">{{ tr('设备分析') }}</button>
+    <button class="seg-btn" data-tab="overview">{{ tr('总览') }}</button>
+  </div>
+  <button class="btn" id="btn-chart-cfg">{{ tr('⚙ 图表设置') }}</button>
+</div>
+
+<div class="modal-mask" id="chart-cfg-mask" style="display:none" onclick="closeChartCfg()">
+  <div class="chart-cfg-panel" onclick="event.stopPropagation()">
+    <div class="cfg-head">
+      <div class="cfg-head-title">{{ tr('图表设置') }}</div>
+      <button class="cfg-close-x" onclick="closeChartCfg()" title="{{ tr('关闭') }}">✕</button>
+    </div>
+    <div class="cfg-row">
+      <div class="cfg-block">
+        <div class="cfg-title">{{ tr('图表风格') }}{{ tr('（') }}5 {{ tr('种预设') }}{{ tr('）') }}</div>
+        <div id="style-minis"></div>
+      </div>
+      <div class="cfg-block">
+        <div class="cfg-title">{{ tr('图表类型') }}</div>
+        <label class="f-check"><input type="radio" name="cfg_chart" value="bar">{{ tr('柱状图') }}</label><br>
+        <label class="f-check"><input type="radio" name="cfg_chart" value="line">{{ tr('折线图') }}</label>
+      </div>
+      <div class="cfg-block">
+        <div class="cfg-title">{{ tr('显示 Top N') }}</div>
+        <select class="f-input" id="cfg-top" style="max-width:110px">
+          <option value="5">5</option><option value="10">10</option>
+          <option value="20">20</option><option value="50">50</option><option value="0">{{ tr('全部') }}</option>
+        </select>
+      </div>
+      <div class="cfg-block">
+        <div class="cfg-title">{{ tr('入库') }}/{{ tr('出库统计期间') }}</div>
+        <select class="f-input" id="cfg-range" style="max-width:130px">
+          <option value="all">{{ tr('全部') }}</option><option value="30">{{ tr('近 {0} 天').format(30) }}</option>
+          <option value="90">{{ tr('近 {0} 天').format(90) }}</option><option value="year">{{ tr('近一年') }}</option>
+        </select>
+      </div>
+      <div class="cfg-block" style="align-self:flex-end">
+        <button class="btn btn-primary" id="btn-cfg-save">{{ tr('保存设置') }}</button>
+        <button class="btn" id="btn-cfg-close">{{ tr('btn_close') }}</button>
+        <span class="muted small" style="margin-left:8px">{{ tr('金额显示由系统设置') }}{{ tr('→') }}{{ tr('权限配置') }}{{ tr('「') }}{{ tr('备件金额查看') }}{{ tr('」') }}{{ tr('统一控制') }}</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ======== 分析视图（库存/入库/出库） ======== -->
+<div id="an-view">
+  <div class="filter-bar">
+    <label class="f-label" id="flt-dim-wrap" style="display:none">{{ tr('占比维度') }}<select class="f-input" id="flt-dim">
+        <option value="wh">{{ tr('按仓库') }}</option>
+        <option value="rack">{{ tr('按货架') }}</option>
+      </select>
+    </label>
+    <label class="f-label">{{ tr('仓库') }}<select class="f-input" id="flt-wh"><option value="">{{ tr('全部仓库') }}</option></select>
+    </label>
+    <label class="f-label">{{ tr('备件名称') }}<select class="f-input" id="flt-name"><option value="">{{ tr('全部名称') }}</option></select>
+    </label>
+    <label class="f-label">{{ tr('备件编码') }}<select class="f-input" id="flt-code"><option value="">{{ tr('全部编码') }}</option></select>
+    </label>
+    <label class="f-label" id="flt-range-wrap" style="display:none">{{ tr('期间') }}<select class="f-input" id="flt-range"><option value="all">{{ tr('全部') }}</option><option value="30">{{ tr('近 {0} 天').format(30) }}</option>
+        <option value="90">{{ tr('近 {0} 天').format(90) }}</option><option value="year">{{ tr('近一年') }}</option></select>
+    </label>
+    <button class="btn" id="btn-refresh">{{ tr('btn_search') }}</button>
+    <button class="btn" id="btn-an-export" title="{{ tr('按当前页签与筛选条件导出') }} Excel{{ tr('（') }}{{ tr('统计') }}+{{ tr('明细') }}{{ tr('）') }}">{{ tr('导出 Excel') }}</button>
+  </div>
+
+  <div class="cards" id="an-cards"></div>
+
+  <div class="charts">
+    <div class="chart-card">
+      <div class="chart-title" id="an-bar-title">—</div>
+      <canvas id="chart-an-bar" height="260"></canvas>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title" id="an-pie-title">—</div>
+      <canvas id="chart-an-pie" height="260"></canvas>
+    </div>
+    <div class="chart-card" id="an-amt-wrap" style="display:none">
+      <div class="chart-title" id="an-amt-title">—</div>
+      <canvas id="chart-an-amt" height="260"></canvas>
+    </div>
+  </div>
+
+  <div class="charts">
+    <div class="chart-card chart-card-wide">
+      <div class="chart-title" id="an-table-title">—</div>
+      <div class="an-table-wrap"><table class="table" id="an-table"><tbody><tr><td class="muted center">{{ tr('加载中…') }}</td></tr></tbody></table></div>
+    </div>
+  </div>
+</div>
+
+<!-- ======== 总览视图（原内容） ======== -->
+<div id="ov-view" style="display:none">
+<div class="dash-head">
+  <div class="seg">
+    <button class="seg-btn active" data-period="day">{{ tr('按日') }}</button>
+    <button class="seg-btn" data-period="week">{{ tr('按周') }}</button>
+    <button class="seg-btn" data-period="month">{{ tr('按月') }}</button>
+  </div>
+  <span class="dash-hint">{{ tr('统计口径') }}{{ tr('：') }}{{ tr('已完成出入库流水') }}{{ tr('（') }}{{ tr('调库不计入') }}{{ tr('）') }}</span>
+</div>
+
+<div class="cards" id="sum-cards">
+  <div class="card"><div class="card-title">{{ tr('入库数量') }}</div><div class="card-num" id="c-in-qty">--</div><div class="card-sub" id="c-in-qty-sub"></div></div>
+  {% if can('price') %}<div class="card"><div class="card-title">{{ tr('入库金额(元)') }}</div><div class="card-num" id="c-in-amt">--</div><div class="card-sub" id="c-in-amt-sub"></div></div>{% endif %}
+  <div class="card"><div class="card-title">{{ tr('出库数量') }}</div><div class="card-num" id="c-out-qty">--</div><div class="card-sub" id="c-out-qty-sub"></div></div>
+  {% if can('price') %}<div class="card"><div class="card-title">{{ tr('出库金额(元)') }}</div><div class="card-num" id="c-out-amt">--</div><div class="card-sub" id="c-out-amt-sub"></div></div>{% endif %}
+  <div class="card"><div class="card-title">{{ tr('呆滞料号数') }}</div><div class="card-num" id="c-stale-count" style="color:#b91c1c">--</div><div class="card-sub" id="c-stale-days"></div></div>
+  {% if can('price') %}<div class="card"><div class="card-title">{{ tr('呆滞库存金额') }}({{ tr('元') }})</div><div class="card-num" id="c-stale-amt" style="color:#b91c1c">--</div><div class="card-sub">{{ tr('超期未领用备件占用资金') }}</div></div>{% endif %}
+</div>
+
+<div class="charts">
+  <div class="chart-card">
+    <div class="chart-title">{{ tr('出入库数量趋势') }}</div>
+    <canvas id="chart-qty" height="260"></canvas>
+  </div>
+  {% if can('price') %}<div class="chart-card">
+    <div class="chart-title">{{ tr('出入库金额趋势') }}({{ tr('元') }})</div>
+    <canvas id="chart-amt" height="260"></canvas>
+  </div>{% endif %}
+</div>
+
+<div class="charts">
+  <div class="chart-card">
+    {% if can('price') %}<div class="chart-title">{{ tr('备件分类库存金额占比') }}({{ tr('元') }})</div>
+    <canvas id="chart-cat" height="260"></canvas>{% endif %}
+  </div>
+  <div class="chart-card">
+    <div class="chart-title">{{ tr('库存上下限预警') }}</div>
+    <div class="alert-box">
+      <div class="alert-section">
+        <div class="alert-head alert-low">🔻 {{ tr('低于下限') }}{{ tr('（') }}0{{ tr('）') }}</div>
+        <div id="alert-low-list" class="alert-list"><span class="muted">{{ tr('加载中…') }}</span></div>
+      </div>
+      <div class="alert-section">
+        <div class="alert-head alert-high">🔺 {{ tr('超过上限') }}{{ tr('（') }}0{{ tr('）') }}</div>
+        <div id="alert-high-list" class="alert-list"><span class="muted">{{ tr('加载中…') }}</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="charts">
+  <div class="chart-card">
+    <div class="chart-title">{{ tr('呆滞物料') }} Top 10
+      {% if can('stale') %}<a class="btn btn-xs" style="float:right" href="{{ url_for('stale_page') }}">{{ tr('呆滞物料管理 →') }}</a>{% endif %}
+    </div>
+    <div class="muted small" id="stale-hint" style="margin-bottom:8px">{{ tr('加载中…') }}</div>
+    <table class="table"><thead><tr><th>{{ tr('th_code') }}</th><th>{{ tr('th_name') }}</th><th>{{ tr('最后领用') }}</th><th>{{ tr('未领用(天)') }}</th><th>{{ tr('库存') }}</th>{% if can('price') %}<th>{{ tr('th_amount') }}</th>{% endif %}</tr></thead>
+      <tbody id="stale-list"><tr><td colspan="6" class="muted">{{ tr('加载中…') }}</td></tr></tbody></table>
+  </div>
+  <div class="chart-card">
+    <div class="chart-title">{{ tr('说明') }}</div>
+    <div class="muted small" style="line-height:1.9">
+      <p>{{ tr('· 呆滞口径：以') }}<b>{{ tr('th_code') }}</b>{{ tr('为锚点') }}{{ tr('，') }}{{ tr('超过设定天数') }}{{ tr('（') }}{{ tr('系统设置可配') }}{{ tr('，') }}{{ tr('默认') }} 90 {{ tr('天') }}{{ tr('）') }}{{ tr('未领用') }}{{ tr('（') }}{{ tr('无出库') }}{{ tr('）') }}{{ tr('即判定为呆滞') }}{{ tr('。') }}</p>
+      <p>· {{ tr('参考日期') }}{{ tr('：') }}{{ tr('最近一次') }}<b>{{ tr('type_out') }}</b>{{ tr('时间') }}{{ tr('；') }}{{ tr('从未出库过的备件按') }}<b>{{ tr('建档日期') }}</b>{{ tr('起算。') }}</p>
+      {% if can('price') %}<p>· {{ tr('调库入库流水不计入领用') }}{{ tr('；') }}{{ tr('呆滞金额') }} = {{ tr('当前库存') }} × {{ tr('单价') }}{{ tr('。') }}</p>{% endif %}
+      <p>{{ tr('· 数据图表主页与') }}<b>{{ tr('大屏展示') }}</b>{{ tr('均含呆滞监控，大屏可在「大屏配置」中调整阈值与显示条数。') }}</p>
+    </div>
+  </div>
+</div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/charts.js') }}"></script>
+<script>
+// 金额敏感：SEE_PRICE=false（无「备件金额查看」权限，普通用户默认）时金额卡/金额图/金额列全部隐藏
+const SEE_PRICE = {{ 'true' if can('price') else 'false' }};
+// ===== 图表风格 5 种预设（与后端 DASH_STYLES 一致） =====
+const DASH_STYLES = {
+  tech:  {name:TR('科技蓝'),   bars:['#2563eb','#3b82f6','#60a5fa','#93c5fd','#1d4ed8','#0ea5e9','#38bdf8'],
+          pie:['#2563eb','#22c55e','#f97316','#8b5cf6','#06b6d4','#ef4444','#eab308','#14b8a6','#f472b6','#64748b']},
+  green: {name:TR('墨绿商务'), bars:['#047857','#059669','#10b981','#34d399','#065f46','#14b8a6','#0d9488'],
+          pie:['#047857','#059669','#10b981','#34d399','#065f46','#14b8a6','#0d9488','#84cc16','#65a30d','#4d7c0f']},
+  gold:  {name:TR('暗夜金'),   bars:['#b45309','#d97706','#f59e0b','#fbbf24','#92400e','#ea580c','#fb923c'],
+          pie:['#b45309','#d97706','#f59e0b','#fbbf24','#92400e','#ea580c','#fb923c','#eab308','#ca8a04','#a16207']},
+  clean: {name:TR('清新白'),   bars:['#0284c7','#0ea5e9','#38bdf8','#7dd3fc','#0369a1','#22d3ee','#67e8f9'],
+          pie:['#0284c7','#0ea5e9','#38bdf8','#7dd3fc','#0369a1','#22d3ee','#67e8f9','#0891b2','#06b6d4','#0e7490']},
+  orange:{name:TR('活力橙'),   bars:['#ea580c','#f97316','#fb923c','#fdba74','#c2410c','#f59e0b','#fbbf24'],
+          pie:['#ea580c','#f97316','#fb923c','#fdba74','#c2410c','#f59e0b','#fbbf24','#ef4444','#f87171','#b91c1c']},
+};
+const DASH_ORDER = ['tech','green','gold','clean','orange'];
+let DCFG = {style:'tech', top_n:10, chart_type:'bar', range:'all'};
+let curTab = 'stock';
+let meta = {whs:[], names:[], codes:[]};
+
+function fmt(v){ return Number(v||0).toLocaleString('zh-CN'); }
+function fmt2(v){ return Number(v||0).toLocaleString('zh-CN',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+function esc(s){ const d=document.createElement('div'); d.textContent=s==null?'':String(s); return d.innerHTML; }
+function pct(prev, cur){
+  if(prev===0) return cur===0 ? ' —' : ' '+TR('↑新增');
+  const d=(cur-prev)/prev*100;
+  return (d>=0?'↑':'↓')+Math.abs(d).toFixed(0)+'%';
+}
+
+// ===== 图表设置面板 =====
+function renderStyleMinis(){
+  const box = document.getElementById('style-minis');
+  box.innerHTML = DASH_ORDER.map(k=>{
+    const st = DASH_STYLES[k];
+    return '<span class="style-mini '+(DCFG.style===k?'on':'')+'" data-style="'+k+'" title="'+st.name+
+      '" style="background:linear-gradient(135deg,'+st.bars[0]+','+st.bars[1]+')"></span>';
+  }).join('');
+  box.querySelectorAll('.style-mini').forEach(el=>{
+    el.onclick = ()=>{ DCFG.style = el.dataset.style; renderStyleMinis(); renderAnalysis(); };
+  });
+}
+// 图表设置：弹窗方式（点弹窗外遮罩或关闭按钮即可关闭）
+const chartCfgMask = document.getElementById('chart-cfg-mask');
+function openChartCfg(){ chartCfgMask.style.display = 'flex'; }
+function closeChartCfg(){ chartCfgMask.style.display = 'none'; }
+document.getElementById('btn-chart-cfg').onclick = openChartCfg;
+document.getElementById('btn-cfg-close').onclick = closeChartCfg;
+document.getElementById('btn-cfg-save').onclick = ()=>{
+  const fd = new FormData();
+  fd.append('style', DCFG.style);
+  fd.append('chart_type', document.querySelector('input[name=cfg_chart]:checked').value);
+  fd.append('top_n', document.getElementById('cfg-top').value);
+  fd.append('range', document.getElementById('cfg-range').value);
+  fetch('/api/analysis/cfg', {method:'POST', body:fd}).then(r=>r.json()).then(d=>{
+    if(d.ok){
+      DCFG = d.cfg; renderStyleMinis(); syncCfgPanel();
+      if(typeof smtToast==='function') smtToast(TR('图表设置已保存并生效'),'success');
+      renderAnalysis();
+    } else { if(typeof smtToast==='function') smtToast(TR('保存失败'),'danger'); }
+  });
+};
+function syncCfgPanel(){
+  document.getElementById('cfg-top').value = String(DCFG.top_n);
+  document.getElementById('cfg-range').value = DCFG.range;
+  const r = document.querySelector('input[name=cfg_chart][value="'+DCFG.chart_type+'"]');
+  if(r) r.checked = true;
+}
+
+// ===== 筛选 / 视图切换 =====
+function loadMeta(){
+  fetch('/api/analysis/meta').then(r=>r.json()).then(d=>{
+    meta = d;
+    const wh = document.getElementById('flt-wh');
+    wh.innerHTML = '<option value="">{{ tr('全部仓库') }}</option>' + d.whs.map(w=>'<option>'+esc(w)+'</option>').join('');
+    const nm = document.getElementById('flt-name');
+    nm.innerHTML = '<option value="">{{ tr('全部名称') }}</option>' + d.names.map(n=>'<option>'+esc(n)+'</option>').join('');
+    const cd = document.getElementById('flt-code');
+    cd.innerHTML = '<option value="">{{ tr('全部编码') }}</option>' + d.codes.map(n=>'<option>'+esc(n)+'</option>').join('');
+  }).catch(e=>console.error(e));
+}
+document.querySelectorAll('#view-tabs .seg-btn').forEach(b=>{
+  b.onclick = ()=>{
+    document.querySelectorAll('#view-tabs .seg-btn').forEach(x=>x.classList.remove('active'));
+    b.classList.add('active');
+    curTab = b.dataset.tab;
+    const an = document.getElementById('an-view');
+    const ov = document.getElementById('ov-view');
+    const wrap = document.getElementById('flt-range-wrap');
+    const dimWrap = document.getElementById('flt-dim-wrap');
+    const whF = document.getElementById('flt-wh').parentElement;
+    const nmF = document.getElementById('flt-name').parentElement;
+    const cdF = document.getElementById('flt-code').parentElement;
+    if(curTab==='overview'){
+      an.style.display='none'; ov.style.display='block'; loadDash();
+      return;
+    }
+    ov.style.display='none'; an.style.display='block';
+    const isUsage = (curTab==='uline'||curTab==='udevice');
+    wrap.style.display = (curTab==='in'||curTab==='out'||isUsage) ? 'block' : 'none';
+    dimWrap.style.display = (curTab==='stock'||curTab==='in'||curTab==='out') ? 'block' : 'none';
+    whF.style.display = isUsage ? 'none' : 'block';
+    nmF.style.display = isUsage ? 'none' : 'block';
+    cdF.style.display = isUsage ? 'none' : 'block';
+    document.getElementById('an-amt-wrap').style.display = 'none';
+    renderAnalysis();
+  };
+});
+document.getElementById('btn-refresh').onclick = renderAnalysis;
+document.getElementById('btn-an-export').onclick = ()=>{
+  const qs = new URLSearchParams({tab:curTab});
+  const wh=document.getElementById('flt-wh').value, nm=document.getElementById('flt-name').value,
+        cd=document.getElementById('flt-code').value;
+  const isUsage = (curTab==='uline'||curTab==='udevice');
+  if(!isUsage){
+    if(wh) qs.set('wh',wh); if(nm) qs.set('name',nm); if(cd) qs.set('code',cd);
+    qs.set('dim', document.getElementById('flt-dim').value || 'wh');
+  }
+  qs.set('top', DCFG.top_n);
+  if(curTab==='in'||curTab==='out'||isUsage){
+    qs.set('range', document.getElementById('flt-range').value || DCFG.range);
+  }
+  window.location = '/api/analysis/export?' + qs.toString();
+};
+
+// ===== 分析渲染 =====
+function renderAnalysis(){
+  const qs = new URLSearchParams({tab:curTab});
+  const wh=document.getElementById('flt-wh').value, nm=document.getElementById('flt-name').value,
+        cd=document.getElementById('flt-code').value;
+  const isUsage = (curTab==='uline'||curTab==='udevice');
+  if(!isUsage){
+    if(wh) qs.set('wh',wh); if(nm) qs.set('name',nm); if(cd) qs.set('code',cd);
+    qs.set('dim', document.getElementById('flt-dim').value || 'wh');
+  }
+  qs.set('top', DCFG.top_n);
+  qs.set('chart', DCFG.chart_type);
+  if(curTab==='in'||curTab==='out'||isUsage){
+    const rng = document.getElementById('flt-range').value;
+    qs.set('range', rng || DCFG.range);
+  }
+  fetch('/api/analysis?'+qs.toString()).then(r=>r.json()).then(d=>{
+    if(!d.ok) return;
+    const st = DASH_STYLES[d.cfg.style] || DASH_STYLES.tech;
+    // 统计卡
+    const cards = document.getElementById('an-cards');
+    if(curTab==='stock'){
+      cards.innerHTML =
+        cardHtml(TR('当前库存数'), fmt(d.stats.cur_stock)+TR('件')) +
+        cardHtml(TR('安全库存数(下限合计)'), fmt(d.stats.safe_stock)+TR('件')) +
+        cardHtml(TR('库存料号数'), fmt(d.stats.part_count)+TR('种')) +
+        (d.cfg.show_amount && d.stats.stock_value!=null ? cardHtml(TR('库存金额(元)'), fmt2(d.stats.stock_value)) : '');
+    } else if(isUsage){
+      const lbl = curTab==='uline' ? TR('线体') : TR('设备');
+      cards.innerHTML =
+        cardHtml(TR('领用数量'), fmt(d.stats.qty)+TR('件')) +
+        (d.cfg.show_amount ? cardHtml(TR('领用金额(元)'), fmt2(d.stats.amount)) : '') +
+        cardHtml(TR('领用单据数'), fmt(d.stats.apps)+TR('笔'));
+    } else {
+      const t = curTab==='in' ? TR('入库') : TR('出库');
+      cards.innerHTML =
+        cardHtml(t+TR('数量'), fmt(d.stats.qty)) +
+        (d.cfg.show_amount ? cardHtml(t+TR('金额(元)'), fmt2(d.stats.amount)) : '') +
+        cardHtml(t+TR('单据数'), fmt(d.stats.apps)+TR('笔'));
+    }
+    // 图
+    const dimName = d.cfg.dim==='rack' ? TR('货架') : TR('仓库');
+    const amtWrap = document.getElementById('an-amt-wrap');
+    if(isUsage){
+      const lbl = curTab==='uline' ? TR('线体') : TR('设备');
+      amtWrap.style.display = d.cfg.show_amount ? 'block' : 'none';
+      document.getElementById('an-bar-title').textContent = d.title;
+      drawBars('chart-an-bar', d.bar.labels, d.bar.series.map(s=>({name:s.name,data:s.data,color:st.bars[0]})), {});
+      if(d.cfg.show_amount && d.amt){
+        document.getElementById('an-amt-title').textContent = TR('各')+lbl+TR('领用金额(元)');
+        drawBars('chart-an-amt', d.amt.labels, d.amt.series.map(s=>({name:s.name,data:s.data,color:st.bars[1]||st.bars[0]})), {});
+        document.getElementById('an-pie-title').textContent = '';
+      } else {
+        // 无金额权限：第二张图用「领用数量占比」饼图填充，不留空位
+        const pieData = d.bar.labels.map((lb,i)=>({name:lb, value:d.bar.series[0].data[i]||0}));
+        drawPie('chart-an-pie', pieData, {colors:st.pie});
+        document.getElementById('an-pie-title').textContent = TR('各')+lbl+TR('领用数量占比');
+      }
+    } else {
+      amtWrap.style.display = 'none';
+      document.getElementById('an-bar-title').textContent = d.title + (d.cfg.chart_type==='line' ? TR('{{ tr('（') }}折线{{ tr('）') }}') : '');
+      document.getElementById('an-pie-title').textContent = (curTab==='stock' ? TR('各')+dimName+TR('库存占比') : (curTab==='in' ? TR('各')+dimName+TR('入库数量占比') : TR('各')+dimName+TR('出库数量占比')));
+      if(d.cfg.chart_type==='line'){
+        drawLines('chart-an-bar', d.bar.labels, d.bar.series.map(s=>({name:s.name,data:s.data,color:st.bars[0]})), {});
+      } else {
+        drawBars('chart-an-bar', d.bar.labels, d.bar.series.map(s=>({name:s.name,data:s.data,color:st.bars[0]})), {});
+      }
+
+      drawPie('chart-an-pie', d.pie, {colors:st.pie});
+    }
+    renderTable(d.rows, d.cfg);
+  }).catch(e=>console.error(e));
+}
+function cardHtml(title, num){
+  return '<div class="card"><div class="card-title">'+title+'</div><div class="card-num">'+num+'</div></div>';
+}
+function renderTable(rows, cfg){
+  const t = document.getElementById('an-table');
+  if(curTab==='stock'){
+    document.getElementById('an-table-title').textContent = '{{ tr('备件库存明细') }}{{ tr('（') }}{{ tr('按筛选条件') }}{{ tr('）') }}';
+    t.innerHTML = '<thead><tr><th>{{ tr('role_warehouse') }}</th><th>{{ tr('库位明细') }}</th><th>{{ tr('备件编码') }}</th><th>{{ tr('备件名称') }}</th><th>{{ tr('规格型号') }}</th><th>{{ tr('单位') }}</th><th>{{ tr('入库数量') }}</th><th>{{ tr('领用数量') }}</th><th>{{ tr('安全库存') }}</th><th>{{ tr('当前库存') }}</th><th>{{ tr('与安全库存差值') }}</th></tr></thead><tbody>'+
+      (rows.length ? rows.map(r=>'<tr><td>'+esc(r.wh)+'</td><td class="mono small">'+esc(r.locations)+'</td><td class="mono">'+esc(r.part_code)+'</td><td>'+esc(r.name)+'</td><td>'+esc(r.spec)+'</td><td>'+esc(r.unit)+'</td><td class="num">'+fmt(r.in_qty)+'</td><td class="num">'+fmt(r.out_qty)+'</td><td class="num">'+fmt(r.safe)+'</td><td class="num">'+fmt(r.stock)+'</td><td class="num">'+(r.diff<0?'<span class="badge badge-danger">'+fmt(r.diff)+'</span>':fmt(r.diff))+'</td></tr>').join('')
+      : '<tr><td colspan="11" class="muted center">{{ tr('无数据') }}</td></tr>')+'</tbody>';
+  } else if(curTab==='uline'||curTab==='udevice'){
+    const lbl = curTab==='uline' ? TR('线体') : TR('设备');
+    document.getElementById('an-table-title').textContent = TR('各')+lbl+' '+TR('领用统计')+' ('+TR('按筛选条件')+')';
+    const amtCol = cfg.show_amount ? '<th>{{ tr('th_amount') }}</th>' : '';
+    t.innerHTML = '<thead><tr><th>'+lbl+'</th><th>{{ tr('领用数量') }}</th>'+amtCol+'</tr></thead><tbody>'+
+      (rows.length ? rows.map(r=>'<tr><td>'+esc(r.name)+'</td><td class="num">'+fmt(r.qty)+'</td>'+(cfg.show_amount?'<td class="num">'+fmt2(r.amount)+'</td>':'')+'</tr>').join('')
+      : '<tr><td colspan="'+(cfg.show_amount?3:2)+'" class="muted center">{{ tr('无数据') }}</td></tr>')+'</tbody>';
+  } else {
+    const t2 = curTab==='in' ? TR('入库') : TR('出库');
+    document.getElementById('an-table-title').textContent = t2+'{{ tr('明细（按筛选条件，最多 500 笔）') }}';
+    const amtCol = cfg.show_amount ? '<th>{{ tr('th_amount') }}</th>' : '';
+    t.innerHTML = '<thead><tr><th>{{ tr('th_time') }}</th><th>{{ tr('th_no') }}</th><th>{{ tr('备件编码') }}</th><th>{{ tr('备件名称') }}</th><th>{{ tr('role_warehouse') }}</th><th>{{ tr('th_quantity') }}</th>'+amtCol+'<th>{{ tr('th_applicant') }}</th><th>{{ tr('执行人') }}</th></tr></thead><tbody>'+
+      (rows.length ? rows.map(r=>'<tr><td class="mono">'+esc(r.created_at)+'</td><td class="mono">'+esc(r.tx_no)+'</td><td class="mono">'+esc(r.part_code)+'</td><td>'+esc(r.name)+'</td><td>'+esc(r.location)+'</td><td class="num">'+fmt(r.quantity)+'</td>'+(cfg.show_amount?'<td class="num">'+fmt2(r.amount)+'</td>':'')+'<td>'+esc(r.applicant||'-')+'</td><td>'+esc(r.operator||'-')+'</td></tr>').join('')
+      : '<tr><td colspan="'+(cfg.show_amount?9:8)+'" class="muted center">{{ tr('无数据') }}</td></tr>')+'</tbody>';
+  }
+}
+
+// ===== 总览视图（原有逻辑） =====
+let curPeriod = 'day';
+function loadDash(){
+  fetch('/api/dashboard?period=' + curPeriod).then(r=>r.json()).then(d=>{
+    const c = d.cards;
+    document.getElementById('c-in-qty').textContent = fmt(c.in_qty);
+    document.getElementById('c-out-qty').textContent = fmt(c.out_qty);
+    const p = c.prev;
+    document.getElementById('c-in-qty-sub').textContent = TR('上期') + ': ' + fmt(p.in_qty) + '  ' + TR('环比') + ' ' + pct(p.in_qty, c.in_qty);
+    document.getElementById('c-out-qty-sub').textContent = TR('上期') + ': ' + fmt(p.out_qty) + '  ' + TR('环比') + ' ' + pct(p.out_qty, c.out_qty);
+    if(SEE_PRICE){
+      document.getElementById('c-in-amt').textContent = fmt(c.in_amt);
+      document.getElementById('c-out-amt').textContent = fmt(c.out_amt);
+      document.getElementById('c-in-amt-sub').textContent  = TR('上期') + ': ' + fmt(p.in_amt) + '  ' + TR('环比') + ' ' + pct(p.in_amt, c.in_amt);
+      document.getElementById('c-out-amt-sub').textContent = TR('上期') + ': ' + fmt(p.out_amt) + '  ' + TR('环比') + ' ' + pct(p.out_amt, c.out_amt);
+    }
+    drawBars('chart-qty', d.series.labels, [
+      {name:TR('入库'), data:d.series.in_qty, color:'#22c55e'},
+      {name:TR('出库'), data:d.series.out_qty, color:'#f97316'}
+    ]);
+    if(SEE_PRICE){
+      drawLines('chart-amt', d.series.labels, [
+        {name:TR('入库金额'), data:d.series.in_amt, color:'#22c55e'},
+        {name:TR('出库金额'), data:d.series.out_amt, color:'#f97316'}
+      ]);
+      drawPie('chart-cat', d.category);
+    }
+    const low = d.alerts.low, high = d.alerts.high;
+    document.querySelector('.alert-low').innerHTML = TR('🔻 低于下限{{ tr('（') }}') + low.length + TR('{{ tr('）') }}');
+    document.querySelector('.alert-high').innerHTML = TR('🔺 超过上限{{ tr('（') }}') + high.length + TR('{{ tr('）') }}');
+    document.getElementById('alert-low-list').innerHTML = low.length ? low.map(a=>
+      '<a class="alert-item" href="/parts?state=low">' + esc(a.code) + ' · ' + esc(a.name) +
+      ' <b>{{ tr('库存') }} ' + fmt(a.stock) + '</b> <span class="badge badge-danger">{{ tr('下限') }} ' + fmt(a.limit) + '</span></a>'
+    ).join('') : '<span class="muted">无{{ tr('，') }}{{ tr('库存健康') }}</span>';
+    document.getElementById('alert-high-list').innerHTML = high.length ? high.map(a=>
+      '<a class="alert-item" href="/parts?state=high">' + esc(a.code) + ' · ' + esc(a.name) +
+      ' <b>{{ tr('库存') }} ' + fmt(a.stock) + '</b> <span class="badge badge-warn">{{ tr('上限') }} ' + fmt(a.limit) + '</span></a>'
+    ).join('') : '<span class="muted">无{{ tr('，') }}{{ tr('库存健康') }}</span>';
+    const st = d.stale;
+    document.getElementById('c-stale-count').textContent = fmt(st.count);
+    document.getElementById('c-stale-days').textContent = TR('阈值 ') + st.days + TR(' 天未领用');
+    if(SEE_PRICE) document.getElementById('c-stale-amt').textContent = fmt2(st.amount);
+    document.getElementById('stale-hint').textContent = TR('按料号统计{{ tr('，') }}超过 ') + st.days + TR(' 天未领用判定为呆滞{{ tr('（') }}可在系统设置调整{{ tr('）') }}');
+    document.getElementById('stale-list').innerHTML = st.top.length ? st.top.map(x=>
+      '<tr><td class="mono">' + esc(x.part_code) + '</td><td>' + esc(x.name) + '</td>' +
+      '<td class="mono">' + esc(x.last_out || TR('从未出库')) + '</td>' +
+      '<td class="num"><span class="badge badge-danger">' + x.days + ' {{ tr('天') }}</span></td>' +
+      '<td class="num">' + fmt(x.total_stock) + '</td>' +
+      (SEE_PRICE ? '<td class="num">' + fmt2(x.amount) + '</td>' : '') + '</tr>'
+    ).join('') : '<tr><td colspan="' + (SEE_PRICE?6:5) + '" class="muted center">{{ tr('无呆滞物料') }}</td></tr>';
+  }).catch(e=>{ console.error(e); });
+}
+document.querySelectorAll('#ov-view .seg-btn').forEach(b=>{
+  b.addEventListener('click', ()=>{
+    document.querySelectorAll('#ov-view .seg-btn').forEach(x=>x.classList.remove('active'));
+    b.classList.add('active');
+    curPeriod = b.dataset.period;
+    loadDash();
+  });
+});
+
+// ===== {{ tr('启动') }} =====
+loadMeta();
+renderStyleMinis();
+renderAnalysis();
+</script>
+{% endblock %}

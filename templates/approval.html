@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block title %}{{ tr('page_approval') }} - Spare Parts Management System{% endblock %}
+{% block page_title %}>{{ tr('page_approval') }}{% endblock %}
+{% block content %}
+
+<div class="card">
+  <div class="card-title">{{ tr('待审批') }} / {{ tr('已处理') }} · {{ tr('贵重备件出库申请') }}</div>
+  <div class="table-wrap">
+    <table class="table">
+      <thead><tr>
+        <th>{{ tr('th_no') }}</th><th>{{ tr('th_time') }}</th><th>{{ tr('th_part') }}</th><th>{{ tr('规格') }}</th><th>{{ tr('单价(元)') }}</th>
+        <th>{{ tr('th_quantity') }}</th><th>{{ tr('th_amount') }}</th><th>{{ tr('申请人（部门）') }}</th><th>{{ tr('th_reason') }}</th><th>{{ tr('放置位置') }}</th><th>{{ tr('th_status') }}</th><th>{{ tr('th_ops') }}</th>
+      </tr></thead>
+      <tbody>
+        {% for a in apps %}
+        <tr>
+          <td class="mono">{{ a.app_no }}</td>
+          <td class="mono">{{ a.created_at }}</td>
+          <td>{{ a.part_code }}<br><span class="muted">{{ a.name }}</span></td>
+          <td class="mono">{{ a.spec or '-' }}</td>
+          <td class="num">{{ '%.2f'|format(a.unit_price) }}</td>
+          <td class="num">{{ a.quantity }}</td>
+          <td class="num"><b>{{ '%.2f'|format(a.quantity * a.unit_price) }}</b></td>
+          <td>{{ a.app_name or '-' }}{% if a.app_dept %}<div class="muted small">{{ a.app_dept }}</div>{% endif %}</td>
+          <td class="muted">{{ a.reason or '-' }}</td>
+          <td class="mono small">{% if a.all_locs_text %}{{ a.all_locs_text }}{% else %}{{ a.location_text or '-' }}{% endif %}</td>
+          <td>
+            {% if a.status=='pending' %}<span class="badge badge-info">{{ tr('待审批') }}</span>
+            {% elif a.status=='approved' %}<span class="badge badge-ok">{{ tr('status_approved') }}</span>
+            {% elif a.status=='rejected' %}<span class="badge badge-warn">{{ tr('status_rejected') }}</span>
+            {% elif a.status=='canceled' %}<span class="badge badge-muted">{{ tr('status_canceled') }}</span>
+            {% else %}<span class="badge badge-ok">{{ tr('已完成出库') }}</span>{% endif %}
+            {% if a.approval_note %}<div class="muted small">{{ tr('意见') }}{{ tr('：') }}{{ a.approval_note }}</div>{% endif %}
+          </td>
+          <td class="ops">
+            {% if a.status=='pending' %}
+            <button class="btn btn-xs btn-ok" onclick="openApproval({{ a.id }}, 'approve', '{{ a.app_no }}')">{{ tr('btn_approve') }}</button>
+            <button class="btn btn-xs btn-danger" onclick="openApproval({{ a.id }}, 'reject', '{{ a.app_no }}')">{{ tr('btn_reject') }}</button>
+            {% else %}<span class="muted small">{{ tr('已处理') }}</span>{% endif %}
+          </td>
+        </tr>
+        {% else %}<tr><td colspan="12" class="muted center">{{ tr('没有贵重备件出库申请') }}</td></tr>{% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="modal-mask" id="ap-modal" style="display:none" onclick="if(event.target===this)closeModal('ap-modal')">
+  <div class="modal">
+    <div class="modal-head"><span id="ap-title">{{ tr('审批') }}</span><button class="modal-x" onclick="closeModal('ap-modal')">✕</button></div>
+    <form class="modal-body" method="post" id="ap-form">
+      <label class="f-label">{{ tr('审批意见') }}<textarea class="f-input" name="note" rows="2" placeholder="{{ tr('可空') }}"></textarea></label>
+      <div class="modal-foot"><button class="btn btn-primary" type="submit" id="ap-btn">{{ tr('btn_confirm') }}</button>
+      <button class="btn" type="button" onclick="closeModal('ap-modal')">{{ tr('btn_cancel') }}</button></div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+function closeModal(id){ document.getElementById(id).style.display='none'; }
+function openApproval(aid, action, no){
+  document.getElementById('ap-form').action='/applications/'+aid+'/'+action;
+  document.getElementById('ap-title').textContent = (action==='approve'?'{{ tr('批准出库') }}{{ tr('：') }}':'{{ tr('驳回') }}{{ tr('：') }}') + no;
+  document.getElementById('ap-btn').textContent = action==='approve' ? TR('确认批准') : TR('确认驳回');
+  document.getElementById('ap-btn').className = 'btn ' + (action==='approve'?'btn-ok':'btn-danger');
+  document.getElementById('ap-modal').style.display='flex';
+}
+</script>
+{% endblock %}
