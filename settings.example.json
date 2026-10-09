@@ -1,0 +1,16 @@
+{
+  "db_path": "",
+  "db_type": "sqlite",
+  "db_host": "",
+  "db_port": 0,
+  "db_user": "",
+  "db_password": "",
+  "db_database": "",
+  "db_service_name": "",
+  "upload_dir": "",
+  "port": 5000,
+  "demo_data": false,
+  "lan_enabled": false,
+  "ad": {},
+  "language": "zh"
+}

@@ -1,0 +1,8 @@
+# 全部数据库驱动（按需安装，SQLite 无需任何驱动）
+flask>=3.0
+ldap3>=2.9
+pillow>=10.0
+pymysql          # MySQL / MariaDB
+psycopg2-binary  # PostgreSQL
+pymssql          # SQL Server (MS SQL)
+oracledb         # Oracle
